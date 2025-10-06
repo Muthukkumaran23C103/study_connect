@@ -1,81 +1,59 @@
 class Message {
   final int? id;
   final int groupId;
-  final int senderId;
+  final String senderId;
+  final String senderName;
+  final String? senderAvatar;
   final String content;
   final String messageType;
-  final String? attachmentUrl;
   final DateTime timestamp;
-  final bool isDeleted;
-
-  // User info for display
-  final String? senderName;
-  final String? senderAvatar;
+  final bool isRead;
+  final String? attachmentUrl;
+  final String? attachmentType;
 
   Message({
     this.id,
     required this.groupId,
     required this.senderId,
+    required this.senderName,
+    this.senderAvatar,
     required this.content,
     this.messageType = 'text',
-    this.attachmentUrl,
     required this.timestamp,
-    this.isDeleted = false,
-    this.senderName,
-    this.senderAvatar,
+    this.isRead = false,
+    this.attachmentUrl,
+    this.attachmentType,
   });
+
+  factory Message.fromMap(Map<String, dynamic> map) {
+    return Message(
+      id: map['id'] as int?,
+      groupId: map['group_id'] as int,
+      senderId: map['sender_id'] as String,
+      senderName: map['sender_name'] as String,
+      senderAvatar: map['sender_avatar'] as String?,
+      content: map['content'] as String,
+      messageType: map['message_type'] as String? ?? 'text',
+      timestamp: DateTime.fromMillisecondsSinceEpoch(map['timestamp'] as int),
+      isRead: (map['is_read'] as int? ?? 0) == 1,
+      attachmentUrl: map['attachment_url'] as String?,
+      attachmentType: map['attachment_type'] as String?,
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'group_id': groupId,
       'sender_id': senderId,
+      'sender_name': senderName,
+      'sender_avatar': senderAvatar,
       'content': content,
       'message_type': messageType,
+      'timestamp': timestamp.millisecondsSinceEpoch,
+      'is_read': isRead ? 1 : 0,
       'attachment_url': attachmentUrl,
-      'timestamp': timestamp.toIso8601String(),
-      'is_deleted': isDeleted ? 1 : 0,
+      'attachment_type': attachmentType,
     };
-  }
-
-  factory Message.fromMap(Map<String, dynamic> map) {
-    return Message(
-      id: map['id']?.toInt(),
-      groupId: map['group_id']?.toInt() ?? 0,
-      senderId: map['sender_id']?.toInt() ?? 0,
-      content: map['content'] ?? '',
-      messageType: map['message_type'] ?? 'text',
-      attachmentUrl: map['attachment_url'],
-      timestamp: DateTime.parse(map['timestamp']),
-      isDeleted: map['is_deleted'] == 1,
-      senderName: map['sender_name'],
-      senderAvatar: map['sender_avatar'],
-    );
-  }
-
-  Message copyWith({
-    int? id,
-    int? groupId,
-    int? senderId,
-    String? content,
-    String? messageType,
-    String? attachmentUrl,
-    DateTime? timestamp,
-    bool? isDeleted,
-    String? senderName,
-    String? senderAvatar,
-  }) {
-    return Message(
-      id: id ?? this.id,
-      groupId: groupId ?? this.groupId,
-      senderId: senderId ?? this.senderId,
-      content: content ?? this.content,
-      messageType: messageType ?? this.messageType,
-      attachmentUrl: attachmentUrl ?? this.attachmentUrl,
-      timestamp: timestamp ?? this.timestamp,
-      isDeleted: isDeleted ?? this.isDeleted,
-      senderName: senderName ?? this.senderName,
-      senderAvatar: senderAvatar ?? this.senderAvatar,
-    );
   }
 }

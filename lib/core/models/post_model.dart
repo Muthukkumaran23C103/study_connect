@@ -1,102 +1,71 @@
-import 'dart:convert';
-
 class Post {
   final int? id;
   final int groupId;
-  final int authorId;
-  final String? title;
+  final String authorId;
+  final String authorName;
+  final String? authorAvatar;
+  final String title;
   final String content;
   final String postType;
-  final List<String> attachmentUrls;
-  final int likesCount;
-  final int commentsCount;
   final DateTime createdAt;
-
-  // User info for display
-  final String? authorName;
-  final String? authorAvatar;
-  final String? groupName;
+  final int likeCount;
+  final int commentCount;
+  final bool isLiked;
+  final String? attachmentUrl;
+  final String? attachmentType;
 
   Post({
     this.id,
     required this.groupId,
     required this.authorId,
-    this.title,
-    required this.content,
-    this.postType = 'general',
-    this.attachmentUrls = const [],
-    this.likesCount = 0,
-    this.commentsCount = 0,
-    required this.createdAt,
-    this.authorName,
+    required this.authorName,
     this.authorAvatar,
-    this.groupName,
+    required this.title,
+    required this.content,
+    this.postType = 'text',
+    required this.createdAt,
+    this.likeCount = 0,
+    this.commentCount = 0,
+    this.isLiked = false,
+    this.attachmentUrl,
+    this.attachmentType,
   });
+
+  factory Post.fromMap(Map<String, dynamic> map) {
+    return Post(
+      id: map['id'] as int?,
+      groupId: map['group_id'] as int,
+      authorId: map['author_id'] as String,
+      authorName: map['author_name'] as String,
+      authorAvatar: map['author_avatar'] as String?,
+      title: map['title'] as String,
+      content: map['content'] as String,
+      postType: map['post_type'] as String? ?? 'text',
+      createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int),
+      likeCount: map['like_count'] as int? ?? 0,
+      commentCount: map['comment_count'] as int? ?? 0,
+      isLiked: (map['is_liked'] as int? ?? 0) == 1,
+      attachmentUrl: map['attachment_url'] as String?,
+      attachmentType: map['attachment_type'] as String?,
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'group_id': groupId,
       'author_id': authorId,
+      'author_name': authorName,
+      'author_avatar': authorAvatar,
       'title': title,
       'content': content,
       'post_type': postType,
-      'attachment_urls': json.encode(attachmentUrls),
-      'likes_count': likesCount,
-      'comments_count': commentsCount,
-      'created_at': createdAt.toIso8601String(),
+      'created_at': createdAt.millisecondsSinceEpoch,
+      'like_count': likeCount,
+      'comment_count': commentCount,
+      'is_liked': isLiked ? 1 : 0,
+      'attachment_url': attachmentUrl,
+      'attachment_type': attachmentType,
     };
-  }
-
-  factory Post.fromMap(Map<String, dynamic> map) {
-    return Post(
-      id: map['id']?.toInt(),
-      groupId: map['group_id']?.toInt() ?? 0,
-      authorId: map['author_id']?.toInt() ?? 0,
-      title: map['title'],
-      content: map['content'] ?? '',
-      postType: map['post_type'] ?? 'general',
-      attachmentUrls: map['attachment_urls'] != null
-          ? List<String>.from(json.decode(map['attachment_urls']))
-          : [],
-      likesCount: map['likes_count']?.toInt() ?? 0,
-      commentsCount: map['comments_count']?.toInt() ?? 0,
-      createdAt: DateTime.parse(map['created_at']),
-      authorName: map['author_name'],
-      authorAvatar: map['author_avatar'],
-      groupName: map['group_name'],
-    );
-  }
-
-  Post copyWith({
-    int? id,
-    int? groupId,
-    int? authorId,
-    String? title,
-    String? content,
-    String? postType,
-    List<String>? attachmentUrls,
-    int? likesCount,
-    int? commentsCount,
-    DateTime? createdAt,
-    String? authorName,
-    String? authorAvatar,
-    String? groupName,
-  }) {
-    return Post(
-      id: id ?? this.id,
-      groupId: groupId ?? this.groupId,
-      authorId: authorId ?? this.authorId,
-      title: title ?? this.title,
-      content: content ?? this.content,
-      postType: postType ?? this.postType,
-      attachmentUrls: attachmentUrls ?? this.attachmentUrls,
-      likesCount: likesCount ?? this.likesCount,
-      commentsCount: commentsCount ?? this.commentsCount,
-      createdAt: createdAt ?? this.createdAt,
-      authorName: authorName ?? this.authorName,
-      authorAvatar: authorAvatar ?? this.authorAvatar,
-      groupName: groupName ?? this.groupName,
-    );
   }
 }

@@ -3,35 +3,32 @@ class StudyGroup {
   final String name;
   final String description;
   final String category;
-  final String? iconPath;
+  final String adminId;
   final DateTime createdAt;
   final int memberCount;
-  final bool isPublic;
-  final String? adminId;
+  final bool isPrivate;
 
   StudyGroup({
     this.id,
     required this.name,
     required this.description,
     required this.category,
-    this.iconPath,
+    required this.adminId,
     required this.createdAt,
-    this.memberCount = 0,
-    this.isPublic = true,
-    this.adminId,
+    this.memberCount = 1,
+    this.isPrivate = false,
   });
 
   factory StudyGroup.fromMap(Map<String, dynamic> map) {
     return StudyGroup(
-      id: map['id'],
-      name: map['name'] ?? '',
-      description: map['description'] ?? '',
-      category: map['category'] ?? '',
-      iconPath: map['icon_path'],
-      createdAt: DateTime.parse(map['created_at']),
-      memberCount: map['member_count'] ?? 0,
-      isPublic: (map['is_public'] ?? 1) == 1,
-      adminId: map['admin_id'],
+      id: map['id'] as int?,
+      name: map['name'] as String,
+      description: map['description'] as String,
+      category: map['category'] as String,
+      adminId: map['admin_id'] as String,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int),
+      memberCount: map['member_count'] as int? ?? 1,
+      isPrivate: (map['is_private'] as int? ?? 0) == 1,
     );
   }
 
@@ -41,11 +38,10 @@ class StudyGroup {
       'name': name,
       'description': description,
       'category': category,
-      'icon_path': iconPath,
-      'created_at': createdAt.toIso8601String(),
-      'member_count': memberCount,
-      'is_public': isPublic ? 1 : 0,
       'admin_id': adminId,
+      'created_at': createdAt.millisecondsSinceEpoch,
+      'member_count': memberCount,
+      'is_private': isPrivate ? 1 : 0,
     };
   }
 
@@ -54,22 +50,20 @@ class StudyGroup {
     String? name,
     String? description,
     String? category,
-    String? iconPath,
+    String? adminId,
     DateTime? createdAt,
     int? memberCount,
-    bool? isPublic,
-    String? adminId,
+    bool? isPrivate,
   }) {
     return StudyGroup(
       id: id ?? this.id,
       name: name ?? this.name,
       description: description ?? this.description,
       category: category ?? this.category,
-      iconPath: iconPath ?? this.iconPath,
+      adminId: adminId ?? this.adminId,
       createdAt: createdAt ?? this.createdAt,
       memberCount: memberCount ?? this.memberCount,
-      isPublic: isPublic ?? this.isPublic,
-      adminId: adminId ?? this.adminId,
+      isPrivate: isPrivate ?? this.isPrivate,
     );
   }
 }
