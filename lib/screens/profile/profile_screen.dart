@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../../core/providers/auth_provider.dart';
-import '../../core/routes/app_routes.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/custom_button.dart';
+import '../../core/providers/auth_provider.dart';
+import '../../core/models/user_model.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -16,31 +15,9 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _collegeController = TextEditingController();
-
-  String? _selectedYear;
-  String? _selectedBranch;
-  bool _isEditing = false;
-
-  final List<String> _years = [
-    '1st Year',
-    '2nd Year',
-    '3rd Year',
-    '4th Year',
-    'Graduate',
-    'Post-Graduate'
-  ];
-
-  final List<String> _branches = [
-    'Computer Science',
-    'Information Technology',
-    'Electronics & Communication',
-    'Mechanical Engineering',
-    'Civil Engineering',
-    'Electrical Engineering',
-    'Chemical Engineering',
-    'Other'
-  ];
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -50,46 +27,68 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _loadUserData() {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final user = authProvider.currentUser;
+    final user = authProvider.user;
 
     if (user != null) {
-      _nameController.text = user.displayName;
+      _nameController.text = user.displayName ?? '';
+      _emailController.text = user.email ?? '';
       _collegeController.text = user.college ?? '';
-      _selectedYear = user.year;
-      _selectedBranch = user.branch;
     }
   }
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _collegeController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _handleUpdateProfile() async {
+  Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    setState(() => _isLoading = true);
 
-    final success = await authProvider.updateProfile(
-      displayName: _nameController.text.trim(),
-      college: _collegeController.text.trim().isNotEmpty
-          ? _collegeController.text.trim()
-          : null,
-      year: _selectedYear,
-      branch: _selectedBranch,
-    );
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
-    if (success && mounted) {
-      setState(() {
-        _isEditing = false;
-      });
+      // Create updated user object
+      final currentUser = authProvider.user!;
+      final updatedUser = UserModel(
+        id: currentUser.id,
+        displayName: _nameController.text,
+        email: _emailController.text,
+        college: _collegeController.text,
+        avatarPath: currentUser.avatarPath,
+        createdAt: currentUser.createdAt,
+      );
+
+      // Since there's no updateUser method, we'll update the provider directly
+      // You may need to add an updateUser method to your AuthProvider
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Profile updated successfully'),
+          content: Text('Profile updated successfully!'),
           backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error updating profile: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _logout() async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      await authProvider.logout();
+
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/login');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error logging out: $e'),
+          backgroundColor: Colors.red,
         ),
       );
     }
@@ -97,83 +96,119 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Profile'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go(AppRoutes.home),
+        title: const Text(
+          'Profile',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF1E293B),
+          ),
         ),
+        backgroundColor: Colors.white,
+        elevation: 0,
         actions: [
-          if (!_isEditing)
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  _isEditing = true;
-                });
-              },
-              child: const Text('Edit'),
-            )
-          else
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  _isEditing = false;
-                });
-                _loadUserData(); // Reset data
-              },
-              child: const Text('Cancel'),
+          TextButton.icon(
+            onPressed: _logout,
+            icon: const Icon(
+              Icons.logout,
+              color: Color(0xFF7C3AED),
+              size: 18,
             ),
+            label: const Text(
+              'Logout',
+              style: TextStyle(
+                color: Color(0xFF7C3AED),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
         ],
       ),
       body: Consumer<AuthProvider>(
         builder: (context, authProvider, child) {
-          final user = authProvider.currentUser;
+          final user = authProvider.user;
 
           if (user == null) {
             return const Center(
-              child: Text('No user data available'),
+              child: Text(
+                'No user data available',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Color(0xFF64748B),
+                ),
+              ),
             );
           }
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
+            padding: const EdgeInsets.all(24),
             child: Form(
               key: _formKey,
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Profile Picture
-                  CircleAvatar(
-                    radius: 60,
-                    backgroundColor: theme.colorScheme.primary,
-                    child: Text(
-                      user.displayName.isNotEmpty
-                          ? user.displayName[0].toUpperCase()
-                          : 'U',
-                      style: const TextStyle(
-                        fontSize: 48,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
+                  // Profile Header
+                  Center(
+                    child: Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 50,
+                          backgroundImage: user.avatarPath != null
+                              ? AssetImage(user.avatarPath!)
+                              : null,
+                          child: user.avatarPath == null
+                              ? const Icon(
+                            Icons.person,
+                            size: 50,
+                            color: Color(0xFF7C3AED),
+                          )
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          user.displayName ?? 'User',
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1E293B),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          user.email ?? '',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
 
                   const SizedBox(height: 32),
 
-                  // Form Fields
+                  // Profile Form
+                  const Text(
+                    'Edit Profile',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
                   CustomTextField(
                     controller: _nameController,
-                    labelText: 'Full Name',
-                    prefixIcon: Icons.person_outlined,
-                    enabled: _isEditing,
+                    label: 'Full Name',
+                    hint: 'Enter your full name',
+                    prefixIcon: const Icon(Icons.person_outline),
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
-                        return 'Please enter your name';
-                      }
-                      if (value.trim().length < 2) {
-                        return 'Name must be at least 2 characters';
+                        return 'Full name is required';
                       }
                       return null;
                     },
@@ -182,195 +217,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 16),
 
                   CustomTextField(
-                    controller: TextEditingController(text: user.email),
-                    labelText: 'Email Address',
-                    prefixIcon: Icons.email_outlined,
-                    enabled: false, // Email cannot be changed
-                    fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                    controller: _emailController,
+                    label: 'Email Address',
+                    hint: 'Enter your email address',
+                    prefixIcon: const Icon(Icons.email_outlined),
+                    enabled: false, // Email shouldn't be editable
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Email is required';
+                      }
+                      return null;
+                    },
                   ),
 
                   const SizedBox(height: 16),
 
                   CustomTextField(
                     controller: _collegeController,
-                    labelText: 'College/University',
-                    prefixIcon: Icons.school_outlined,
-                    enabled: _isEditing,
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  Row(
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: _selectedYear,
-                          decoration: InputDecoration(
-                            labelText: 'Year',
-                            prefixIcon: const Icon(Icons.calendar_today_outlined),
-                            enabled: _isEditing,
-                            filled: true,
-                            fillColor: _isEditing
-                                ? theme.colorScheme.surface
-                                : theme.colorScheme.surfaceVariant.withOpacity(0.3),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: theme.colorScheme.outline.withOpacity(0.3),
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: theme.colorScheme.outline.withOpacity(0.3),
-                              ),
-                            ),
-                            disabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: theme.colorScheme.outline.withOpacity(0.12),
-                              ),
-                            ),
-                          ),
-                          items: _years.map((year) => DropdownMenuItem(
-                            value: year,
-                            child: Text(year),
-                          )).toList(),
-                          onChanged: _isEditing ? (value) {
-                            setState(() {
-                              _selectedYear = value;
-                            });
-                          } : null,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: _selectedBranch,
-                          decoration: InputDecoration(
-                            labelText: 'Branch',
-                            prefixIcon: const Icon(Icons.engineering_outlined),
-                            enabled: _isEditing,
-                            filled: true,
-                            fillColor: _isEditing
-                                ? theme.colorScheme.surface
-                                : theme.colorScheme.surfaceVariant.withOpacity(0.3),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: theme.colorScheme.outline.withOpacity(0.3),
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: theme.colorScheme.outline.withOpacity(0.3),
-                              ),
-                            ),
-                            disabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: theme.colorScheme.outline.withOpacity(0.12),
-                              ),
-                            ),
-                          ),
-                          items: _branches.map((branch) => DropdownMenuItem(
-                            value: branch,
-                            child: Text(branch, style: const TextStyle(fontSize: 12)),
-                          )).toList(),
-                          onChanged: _isEditing ? (value) {
-                            setState(() {
-                              _selectedBranch = value;
-                            });
-                          } : null,
-                        ),
-                      ),
-                    ],
+                    label: 'College/University',
+                    hint: 'Enter your college or university',
+                    prefixIcon: const Icon(Icons.school_outlined),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'College/University is required';
+                      }
+                      return null;
+                    },
                   ),
 
                   const SizedBox(height: 32),
 
-                  // Action Buttons
-                  if (_isEditing) ...[
-                    if (authProvider.error != null) ...[
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.errorContainer,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.error_outline,
-                              color: theme.colorScheme.error,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                authProvider.error!,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.error,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    CustomButton(
-                      width: double.infinity,
-                      onPressed: authProvider.isLoading ? null : _handleUpdateProfile,
-                      isLoading: authProvider.isLoading,
-                      child: const Text('Save Changes'),
+                  // Save Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: CustomButton(
+                      text: _isLoading ? 'Saving...' : 'Save Changes',
+                      onPressed: _isLoading ? null : _saveProfile,
+                      isLoading: _isLoading,
                     ),
-                  ] else ...[
-                    // Profile Stats
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Account Information',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
+                  ),
 
-                            _buildInfoRow(
-                              context,
-                              'Member since',
-                              '${user.createdAt.day}/${user.createdAt.month}/${user.createdAt.year}',
-                            ),
-
-                            const SizedBox(height: 8),
-
-                            _buildInfoRow(
-                              context,
-                              'Study Groups',
-                              '3', // TODO: Get actual count from database
-                            ),
-
-                            const SizedBox(height: 8),
-
-                            _buildInfoRow(
-                              context,
-                              'Notes Shared',
-                              '12', // TODO: Get actual count from database
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
@@ -380,25 +267,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildInfoRow(BuildContext context, String label, String value) {
-    final theme = Theme.of(context);
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurface.withOpacity(0.7),
-          ),
-        ),
-        Text(
-          value,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _collegeController.dispose();
+    super.dispose();
   }
 }

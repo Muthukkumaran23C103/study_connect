@@ -1,7 +1,4 @@
-import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
 import '../../screens/splash/splash_screen.dart';
 import '../../screens/auth/login_screen.dart';
 import '../../screens/auth/register_screen.dart';
@@ -15,86 +12,82 @@ class AppRoutes {
   static const String home = '/home';
   static const String profile = '/profile';
 
-  static final GoRouter router = GoRouter(
-    initialLocation: splash,
-    routes: [
-      // Splash Screen
-      GoRoute(
-        path: splash,
-        builder: (context, state) => const SplashScreen(),
-      ),
+  static Route<dynamic> generateRoute(RouteSettings settings) {
+    switch (settings.name) {
+      case splash:
+        return PageRouteBuilder(
+          pageBuilder: (_, __, ___) => const SplashScreen(),
+          transitionDuration: const Duration(milliseconds: 300),
+          transitionsBuilder: (_, animation, __, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+        );
 
-      // Authentication Routes
-      GoRoute(
-        path: login,
-        builder: (context, state) => const LoginScreen(),
-      ),
-      GoRoute(
-        path: register,
-        builder: (context, state) => const RegisterScreen(),
-      ),
+      case login:
+        return PageRouteBuilder(
+          pageBuilder: (_, __, ___) => const LoginScreen(),
+          transitionDuration: const Duration(milliseconds: 300),
+          transitionsBuilder: (_, animation, __, child) {
+            const begin = Offset(1.0, 0.0);
+            const end = Offset.zero;
+            const curve = Curves.easeInOut;
+            var tween = Tween(begin: begin, end: end).chain(
+              CurveTween(curve: curve),
+            );
+            var offsetAnimation = animation.drive(tween);
+            return SlideTransition(position: offsetAnimation, child: child);
+          },
+        );
 
-      // Main App Routes
-      GoRoute(
-        path: home,
-        builder: (context, state) => const HomeScreen(),
-      ),
-      GoRoute(
-        path: profile,
-        builder: (context, state) => const ProfileScreen(),
-      ),
-    ],
+      case register:
+        return PageRouteBuilder(
+          pageBuilder: (_, __, ___) => const RegisterScreen(),
+          transitionDuration: const Duration(milliseconds: 300),
+          transitionsBuilder: (_, animation, __, child) {
+            const begin = Offset(1.0, 0.0);
+            const end = Offset.zero;
+            const curve = Curves.easeInOut;
+            var tween = Tween(begin: begin, end: end).chain(
+              CurveTween(curve: curve),
+            );
+            var offsetAnimation = animation.drive(tween);
+            return SlideTransition(position: offsetAnimation, child: child);
+          },
+        );
 
-    // Redirect logic
-    redirect: (context, state) {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final isLoggedIn = authProvider.isAuthenticated;
-      final isOnSplash = state.matchedLocation == splash;
-      final isOnAuth = state.matchedLocation == login || state.matchedLocation == register;
+      case home:
+        return PageRouteBuilder(
+          pageBuilder: (_, __, ___) => const HomeScreen(),
+          transitionDuration: const Duration(milliseconds: 300),
+          transitionsBuilder: (_, animation, __, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+        );
 
-      // If user is not logged in and not on auth pages, redirect to login
-      if (!isLoggedIn && !isOnAuth && !isOnSplash) {
-        return login;
-      }
+      case profile:
+        return PageRouteBuilder(
+          pageBuilder: (_, __, ___) => const ProfileScreen(),
+          transitionDuration: const Duration(milliseconds: 300),
+          transitionsBuilder: (_, animation, __, child) {
+            const begin = Offset(0.0, 1.0);
+            const end = Offset.zero;
+            const curve = Curves.easeInOut;
+            var tween = Tween(begin: begin, end: end).chain(
+              CurveTween(curve: curve),
+            );
+            var offsetAnimation = animation.drive(tween);
+            return SlideTransition(position: offsetAnimation, child: child);
+          },
+        );
 
-      // If user is logged in and on auth pages, redirect to home
-      if (isLoggedIn && isOnAuth) {
-        return home;
-      }
-
-      return null; // No redirect needed
-    },
-
-    // Error handling
-    errorBuilder: (context, state) => Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Colors.red,
+      default:
+        return MaterialPageRoute(
+          builder: (_) => Scaffold(
+            body: Center(
+              child: Text('No route defined for ${settings.name}'),
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Page Not Found',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'The page you requested could not be found.',
-              style: Theme.of(context).textTheme.bodyMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: () => context.go(home),
-              child: const Text('Go Home'),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
+          ),
+        );
+    }
+  }
 }
