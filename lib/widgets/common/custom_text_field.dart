@@ -14,8 +14,8 @@ class CustomTextField extends StatefulWidget {
 
   const CustomTextField({
     super.key,
-    required this.label,
-    this.hintText,
+    required this.label,           // ✅ REQUIRED
+    this.hintText,                // ✅ Use this (not 'hint')
     this.controller,
     this.obscureText = false,
     this.prefixIcon,

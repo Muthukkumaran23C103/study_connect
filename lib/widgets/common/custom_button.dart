@@ -11,14 +11,15 @@ class CustomButton extends StatelessWidget {
 
   const CustomButton({
     super.key,
-    required this.text,
+    required this.text,           // ✅ REQUIRED
     this.onPressed,
     this.isLoading = false,
-    this.type = ButtonType.primary,
+    this.type = ButtonType.primary,  // ✅ Use this (not 'variant')
     this.icon,
     this.width,
     this.height = 48,
   });
+
 
   @override
   Widget build(BuildContext context) {

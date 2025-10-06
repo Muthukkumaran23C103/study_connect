@@ -1,19 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/auth_provider.dart';
-import '../../core/models/user_model.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/custom_button.dart';
+import '../../core/models/user_model.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({Key? key}) : super(key: key);
+  const ProfileScreen({super.key});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   late TextEditingController _emailController;
   late TextEditingController _collegeController;
@@ -23,10 +22,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _initializeControllers();
-  }
-
-  void _initializeControllers() {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.currentUser;
 
@@ -47,237 +42,186 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
-  Future<void> _updateProfile() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
+  Future<void> _saveProfile() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final currentUser = authProvider.currentUser!;
 
-    final result = await authProvider.updateProfile(
-      displayName: _nameController.text.trim(),
-      college: _collegeController.text.trim(),
-      year: _yearController.text.trim(),
-      branch: _branchController.text.trim(),
-    );
+    try {
+      await authProvider.updateProfile(
+        displayName: _nameController.text,
+        college: _collegeController.text,
+        year: _yearController.text,
+        branch: _branchController.text,
+      );
 
-    if (mounted) {
-      if (result) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile updated successfully!'),
-            backgroundColor: Colors.green,
-          ),
+          const SnackBar(content: Text('Profile updated successfully!')),
         );
-      } else {
+      }
+    } catch (error) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(authProvider.error ?? 'Failed to update profile'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: ${error.toString()}')),
         );
       }
     }
   }
 
   Future<void> _logout() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    await authProvider.logout();
-
-    if (mounted) {
-      Navigator.of(context).pushReplacementNamed('/login');
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      await authProvider.logout();
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/login');
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error logging out: ${error.toString()}')),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<AuthProvider>(
-      builder: (context, authProvider, child) {
-        final user = authProvider.currentUser;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Profile'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
+      body: Consumer<AuthProvider>(
+        builder: (context, authProvider, child) {
+          final user = authProvider.currentUser;
 
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('Profile'),
-            centerTitle: true,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.logout),
-                onPressed: _logout,
-                tooltip: 'Logout',
-              ),
-            ],
-          ),
-          body: authProvider.isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Profile Avatar
-                  Center(
-                    child: Stack(
-                      children: [
-                        CircleAvatar(
-                          radius: 60,
-                          backgroundImage: user?.avatarPath != null
-                              ? AssetImage(user!.avatarPath!)
-                              : null,
-                          child: user?.avatarPath == null
-                              ? const Icon(
-                            Icons.person,
-                            size: 60,
-                            color: Colors.white,
-                          )
-                              : null,
-                        ),
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primary,
-                              shape: BoxShape.circle,
-                            ),
-                            child: IconButton(
-                              icon: const Icon(
-                                Icons.camera_alt,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                              onPressed: () {
-                                // TODO: Implement image picker
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Image picker coming soon!'),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 30),
+          if (user == null) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-                  // Profile Form
-                  CustomTextField(
-                    label: 'Full Name',
-                    hint: 'Enter your full name',
-                    controller: _nameController,
-                    prefixIcon: const Icon(Icons.person_outline),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Name is required';
-                      }
-                      if (value.trim().length < 2) {
-                        return 'Name must be at least 2 characters';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 20),
-
-                  CustomTextField(
-                    label: 'Email Address',
-                    hint: 'Enter your email address',
-                    controller: _emailController,
-                    prefixIcon: const Icon(Icons.email_outlined),
-                    keyboardType: TextInputType.emailAddress,
-                    readOnly: true, // Email shouldn't be editable after registration
-                  ),
-                  const SizedBox(height: 20),
-
-                  CustomTextField(
-                    label: 'College/University',
-                    hint: 'Enter your college or university',
-                    controller: _collegeController,
-                    prefixIcon: const Icon(Icons.school_outlined),
-                  ),
-                  const SizedBox(height: 20),
-
-                  Row(
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Profile Avatar
+                Center(
+                  child: Stack(
                     children: [
-                      Expanded(
-                        child: CustomTextField(
-                          label: 'Year',
-                          hint: 'e.g., 2nd Year',
-                          controller: _yearController,
-                          prefixIcon: const Icon(Icons.calendar_today_outlined),
-                        ),
+                      CircleAvatar(
+                        radius: 50,
+                        backgroundImage: user.avatarPath != null
+                            ? NetworkImage(user.avatarPath!)
+                            : null,
+                        child: user.avatarPath == null
+                            ? const Icon(Icons.person, size: 50)
+                            : null,
                       ),
-                      const SizedBox(width: 15),
-                      Expanded(
-                        child: CustomTextField(
-                          label: 'Branch',
-                          hint: 'e.g., Computer Science',
-                          controller: _branchController,
-                          prefixIcon: const Icon(Icons.category_outlined),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary,
+                            shape: BoxShape.circle,
+                          ),
+                          child: IconButton(
+                            icon: const Icon(Icons.camera_alt, color: Colors.white),
+                            onPressed: () {
+                              // TODO: Implement image picker
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Image picker coming soon!')),
+                              );
+                            },
+                          ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 30),
+                ),
+                const SizedBox(height: 32),
 
-                  // Update Profile Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: CustomButton(
-                      text: 'Save Changes',
-                      onPressed: _updateProfile,
-                      isLoading: authProvider.isLoading,
-                    ),
-                  ),
-                  const SizedBox(height: 15),
+                // Form Fields
+                CustomTextField(
+                  label: 'Full Name',
+                  hintText: 'Enter your full name',  // ✅ FIXED: hintText
+                  controller: _nameController,
+                  prefixIcon: const Icon(Icons.person_outline),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your name';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
 
-                  // Logout Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: CustomButton(
-                      text: 'Logout',
-                      onPressed: _logout,
-                      variant: ButtonVariant.outlined,
-                      color: Colors.red,
-                    ),
-                  ),
+                CustomTextField(
+                  label: 'Email Address',
+                  hintText: 'Enter your email address',  // ✅ FIXED: hintText
+                  controller: _emailController,
+                  enabled: false,  // Email shouldn't be editable
+                  prefixIcon: const Icon(Icons.email_outlined),
+                ),
+                const SizedBox(height: 16),
 
-                  // Error Display
-                  if (authProvider.error != null) ...[
-                    const SizedBox(height: 20),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.red.shade200),
+                CustomTextField(
+                  label: 'College/University',
+                  hintText: 'Enter your college or university',  // ✅ FIXED: hintText
+                  controller: _collegeController,
+                  prefixIcon: const Icon(Icons.school_outlined),
+                ),
+                const SizedBox(height: 16),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: CustomTextField(
+                        label: 'Year',
+                        hintText: 'e.g., 2nd Year',  // ✅ FIXED: hintText
+                        controller: _yearController,
+                        prefixIcon: const Icon(Icons.calendar_today_outlined),
                       ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.error, color: Colors.red.shade700),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              authProvider.error!,
-                              style: TextStyle(color: Colors.red.shade700),
-                            ),
-                          ),
-                        ],
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: CustomTextField(
+                        label: 'Branch',
+                        hintText: 'e.g., Computer Science',  // ✅ FIXED: hintText
+                        controller: _branchController,
+                        prefixIcon: const Icon(Icons.category_outlined),
                       ),
                     ),
                   ],
-                ],
-              ),
+                ),
+                const SizedBox(height: 32),
+
+                // Action Buttons
+                Column(
+                  children: [
+                    CustomButton(
+                      text: 'Save Changes',  // ✅ FIXED: text parameter
+                      onPressed: _saveProfile,
+                      type: ButtonType.primary,  // ✅ FIXED: type parameter
+                      icon: Icons.save,
+                    ),
+                    const SizedBox(height: 16),
+                    CustomButton(
+                      text: 'Logout',  // ✅ FIXED: text parameter
+                      onPressed: _logout,
+                      type: ButtonType.secondary,  // ✅ FIXED: type parameter
+                      icon: Icons.logout,
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
