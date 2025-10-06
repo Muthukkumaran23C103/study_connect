@@ -4,11 +4,58 @@ import '../../core/providers/auth_provider.dart';
 import '../../core/providers/app_provider.dart';
 import '../../core/routes/app_routes.dart';
 
+import '../chat/chat_list_screen.dart';        // NEW
+import '../posts/post_feed_screen.dart';       // NEW
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
+}
+
+
+
+
+class _HomeScreenState extends State<HomeScreen> {
+  int _currentIndex = 0;
+
+  final List<Widget> _screens = [
+    const StudyGroupsScreen(),      // Your existing groups screen
+    const ChatListScreen(),         // NEW - List of chats
+    const PostFeedScreen(),         // NEW - Social posts
+    const ProfileScreen(),          // Your existing profile
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: _screens[_currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.groups),
+            label: 'Groups',
+          ),
+          BottomNavigationBarItem(     // NEW
+            icon: Icon(Icons.chat),
+            label: 'Chats',
+          ),
+          BottomNavigationBarItem(     // NEW
+            icon: Icon(Icons.post_add),
+            label: 'Posts',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Profile',
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _HomeScreenState extends State<HomeScreen> {

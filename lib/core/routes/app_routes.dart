@@ -1,8 +1,10 @@
-import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../screens/splash/splash_screen.dart';
 import '../../screens/auth/login_screen.dart';
 import '../../screens/auth/register_screen.dart';
 import '../../screens/home/home_screen.dart';
+import '../../screens/chat/chat_screen.dart';         // NEW
+import '../../screens/posts/post_feed_screen.dart';   // NEW
 import '../../screens/profile/profile_screen.dart';
 
 class AppRoutes {
@@ -10,84 +12,35 @@ class AppRoutes {
   static const String login = '/login';
   static const String register = '/register';
   static const String home = '/home';
+  static const String chat = '/chat';         // NEW
+  static const String postFeed = '/posts';    // NEW
   static const String profile = '/profile';
 
-  static Route<dynamic> generateRoute(RouteSettings settings) {
-    switch (settings.name) {
-      case splash:
-        return PageRouteBuilder(
-          pageBuilder: (_, __, ___) => const SplashScreen(),
-          transitionDuration: const Duration(milliseconds: 300),
-          transitionsBuilder: (_, animation, __, child) {
-            return FadeTransition(opacity: animation, child: child);
-          },
-        );
+  static final GoRouter router = GoRouter(
+    initialLocation: splash,
+    routes: [
+      // Existing routes
+      GoRoute(path: splash, builder: (context, state) => const SplashScreen()),
+      GoRoute(path: login, builder: (context, state) => const LoginScreen()),
+      GoRoute(path: register, builder: (context, state) => const RegisterScreen()),
+      GoRoute(path: home, builder: (context, state) => const HomeScreen()),
+      GoRoute(path: profile, builder: (context, state) => const ProfileScreen()),
 
-      case login:
-        return PageRouteBuilder(
-          pageBuilder: (_, __, ___) => const LoginScreen(),
-          transitionDuration: const Duration(milliseconds: 300),
-          transitionsBuilder: (_, animation, __, child) {
-            const begin = Offset(1.0, 0.0);
-            const end = Offset.zero;
-            const curve = Curves.easeInOut;
-            var tween = Tween(begin: begin, end: end).chain(
-              CurveTween(curve: curve),
-            );
-            var offsetAnimation = animation.drive(tween);
-            return SlideTransition(position: offsetAnimation, child: child);
-          },
-        );
-
-      case register:
-        return PageRouteBuilder(
-          pageBuilder: (_, __, ___) => const RegisterScreen(),
-          transitionDuration: const Duration(milliseconds: 300),
-          transitionsBuilder: (_, animation, __, child) {
-            const begin = Offset(1.0, 0.0);
-            const end = Offset.zero;
-            const curve = Curves.easeInOut;
-            var tween = Tween(begin: begin, end: end).chain(
-              CurveTween(curve: curve),
-            );
-            var offsetAnimation = animation.drive(tween);
-            return SlideTransition(position: offsetAnimation, child: child);
-          },
-        );
-
-      case home:
-        return PageRouteBuilder(
-          pageBuilder: (_, __, ___) => const HomeScreen(),
-          transitionDuration: const Duration(milliseconds: 300),
-          transitionsBuilder: (_, animation, __, child) {
-            return FadeTransition(opacity: animation, child: child);
-          },
-        );
-
-      case profile:
-        return PageRouteBuilder(
-          pageBuilder: (_, __, ___) => const ProfileScreen(),
-          transitionDuration: const Duration(milliseconds: 300),
-          transitionsBuilder: (_, animation, __, child) {
-            const begin = Offset(0.0, 1.0);
-            const end = Offset.zero;
-            const curve = Curves.easeInOut;
-            var tween = Tween(begin: begin, end: end).chain(
-              CurveTween(curve: curve),
-            );
-            var offsetAnimation = animation.drive(tween);
-            return SlideTransition(position: offsetAnimation, child: child);
-          },
-        );
-
-      default:
-        return MaterialPageRoute(
-          builder: (_) => Scaffold(
-            body: Center(
-              child: Text('No route defined for ${settings.name}'),
-            ),
-          ),
-        );
-    }
-  }
+      // Phase 2 NEW routes
+      GoRoute(
+        path: chat,
+        builder: (context, state) {
+          final groupId = state.uri.queryParameters['groupId'] ?? '';
+          return ChatScreen(groupId: groupId);
+        },
+      ),
+      GoRoute(
+        path: postFeed,
+        builder: (context, state) {
+          final groupId = state.uri.queryParameters['groupId'] ?? '';
+          return PostFeedScreen(groupId: groupId);
+        },
+      ),
+    ],
+  );
 }

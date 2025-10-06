@@ -1,82 +1,218 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import '../core/models/user_model.dart';
+import '../core/models/study_group_model.dart';
+import '../core/models/message_model.dart';
+import '../core/models/post_model.dart';
+import '../core/database/schema.dart';
 
 class DatabaseService {
   static Database? _database;
+  static const String _databaseName = 'study_connect.db';
+  static const int _databaseVersion = 2; // Updated version
 
-  static Future<Database> get database async {
-    if (_database != null) return _database!;
-    _database = await _initDB();
+  static DatabaseService? _instance;
+  DatabaseService._();
+
+  static DatabaseService get instance {
+    _instance ??= DatabaseService._();
+    return _instance!;
+  }
+
+  Future<Database> get database async {
+    _database ??= await _initDatabase();
     return _database!;
   }
 
-  static Future<Database> _initDB() async {
-    String path = join(await getDatabasesPath(), 'studyconnect.db');
+  Future<Database> _initDatabase() async {
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, _databaseName);
+
     return await openDatabase(
       path,
-      version: 1,
-      onCreate: _createTables,
+      version: _databaseVersion,
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
-  static Future<void> _createTables(Database db, int version) async {
+  Future<void> _onCreate(Database db, int version) async {
+    // Create all tables
     await db.execute('''
-      CREATE TABLE users(
-        id TEXT PRIMARY KEY,
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         email TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
-        username TEXT NOT NULL,
-        profilePicUrl TEXT,
-        registeredEmail TEXT,
-        firstName TEXT,
-        lastName TEXT,
-        bio TEXT,
+        displayName TEXT NOT NULL,
+        college TEXT,
+        year TEXT,
+        branch TEXT,
+        avatarPath TEXT,
         createdAt TEXT NOT NULL,
-        updatedAt TEXT,
-        isActive INTEGER DEFAULT 1,
-        isVerified INTEGER DEFAULT 0,
-        interests TEXT,
-        settings TEXT
+        lastActive TEXT
       )
     ''');
 
     await db.execute('''
-      CREATE TABLE study_groups(
-        id TEXT PRIMARY KEY,
-        title TEXT NOT NULL,
-        description TEXT NOT NULL,
+      CREATE TABLE study_groups (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT,
         category TEXT NOT NULL,
-        memberCount INTEGER DEFAULT 0,
-        maxMembers INTEGER DEFAULT 50,
-        createdBy TEXT NOT NULL,
-        createdAt TEXT NOT NULL,
-        updatedAt TEXT,
-        tags TEXT,
-        imageUrl TEXT,
-        meetingLink TEXT,
-        nextMeetingDate TEXT,
-        isActive INTEGER DEFAULT 1,
         isPublic INTEGER DEFAULT 1,
-        isPremium INTEGER DEFAULT 0,
-        rating REAL,
-        ratingCount INTEGER DEFAULT 0,
-        settings TEXT,
-        admins TEXT,
-        members TEXT,
+        createdBy INTEGER NOT NULL,
+        createdAt TEXT NOT NULL,
+        memberCount INTEGER DEFAULT 0,
         FOREIGN KEY (createdBy) REFERENCES users (id)
       )
     ''');
 
     await db.execute('''
-      CREATE TABLE user_groups(
-        userId TEXT,
-        groupId TEXT,
+      CREATE TABLE group_members (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        groupId INTEGER NOT NULL,
+        userId INTEGER NOT NULL,
         role TEXT DEFAULT 'member',
         joinedAt TEXT NOT NULL,
-        PRIMARY KEY (userId, groupId),
+        FOREIGN KEY (groupId) REFERENCES study_groups (id),
         FOREIGN KEY (userId) REFERENCES users (id),
-        FOREIGN KEY (groupId) REFERENCES study_groups (id)
+        UNIQUE(groupId, userId)
       )
     ''');
+
+    // Phase 2 tables
+    await db.execute(DatabaseSchema.createMessagesTable);
+    await db.execute(DatabaseSchema.createPostsTable);
+    await db.execute(DatabaseSchema.createCommentsTable);
+    await db.execute(DatabaseSchema.createLikesTable);
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // Add Phase 2 tables
+      await db.execute(DatabaseSchema.createMessagesTable);
+      await db.execute(DatabaseSchema.createPostsTable);
+      await db.execute(DatabaseSchema.createCommentsTable);
+      await db.execute(DatabaseSchema.createLikesTable);
+    }
+  }
+
+  // Message operations
+  Future<int> insertMessage(Message message) async {
+    final db = await database;
+    return await db.insert('messages', message.toMap());
+  }
+
+  Future<List<Message>> getMessages(int groupId, {int limit = 50}) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT m.*, u.displayName as sender_name, u.avatarPath as sender_avatar
+      FROM messages m
+      LEFT JOIN users u ON m.sender_id = u.id
+      WHERE m.group_id = ? AND m.is_deleted = 0
+      ORDER BY m.timestamp DESC
+      LIMIT ?
+    ''', [groupId, limit]);
+
+    return List.generate(maps.length, (i) => Message.fromMap(maps[i]));
+  }
+
+  Future<void> deleteMessage(int messageId) async {
+    final db = await database;
+    await db.update('messages',
+        {'is_deleted': 1},
+        where: 'id = ?',
+        whereArgs: [messageId]
+    );
+  }
+
+  // Post operations
+  Future<int> insertPost(Post post) async {
+    final db = await database;
+    return await db.insert('posts', post.toMap());
+  }
+
+  Future<List<Post>> getPosts({int? groupId, int limit = 20}) async {
+    final db = await database;
+    String query = '''
+      SELECT p.*, u.displayName as author_name, u.avatarPath as author_avatar,
+             sg.name as group_name
+      FROM posts p
+      LEFT JOIN users u ON p.author_id = u.id
+      LEFT JOIN study_groups sg ON p.group_id = sg.id
+    ''';
+
+    List<dynamic> args = [];
+    if (groupId != null) {
+      query += ' WHERE p.group_id = ?';
+      args.add(groupId);
+    }
+
+    query += ' ORDER BY p.created_at DESC LIMIT ?';
+    args.add(limit);
+
+    final List<Map<String, dynamic>> maps = await db.rawQuery(query, args);
+    return List.generate(maps.length, (i) => Post.fromMap(maps[i]));
+  }
+
+  Future<void> likePost(int postId, int userId) async {
+    final db = await database;
+
+    // Check if already liked
+    final existing = await db.query('likes',
+      where: 'post_id = ? AND user_id = ?',
+      whereArgs: [postId, userId],
+    );
+
+    if (existing.isEmpty) {
+      // Add like
+      await db.insert('likes', {
+        'post_id': postId,
+        'user_id': userId,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      // Update likes count
+      await db.rawUpdate('''
+        UPDATE posts SET likes_count = likes_count + 1 WHERE id = ?
+      ''', [postId]);
+    } else {
+      // Remove like
+      await db.delete('likes',
+        where: 'post_id = ? AND user_id = ?',
+        whereArgs: [postId, userId],
+      );
+
+      // Update likes count
+      await db.rawUpdate('''
+        UPDATE posts SET likes_count = likes_count - 1 WHERE id = ?
+      ''', [postId]);
+    }
+  }
+
+  Future<bool> isPostLiked(int postId, int userId) async {
+    final db = await database;
+    final result = await db.query('likes',
+      where: 'post_id = ? AND user_id = ?',
+      whereArgs: [postId, userId],
+    );
+    return result.isNotEmpty;
+  }
+
+  // Search functionality
+  Future<List<Post>> searchPosts(String query, {int limit = 20}) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT p.*, u.displayName as author_name, u.avatarPath as author_avatar,
+             sg.name as group_name
+      FROM posts p
+      LEFT JOIN users u ON p.author_id = u.id
+      LEFT JOIN study_groups sg ON p.group_id = sg.id
+      WHERE p.title LIKE ? OR p.content LIKE ?
+      ORDER BY p.created_at DESC
+      LIMIT ?
+    ''', ['%$query%', '%$query%', limit]);
+
+    return List.generate(maps.length, (i) => Post.fromMap(maps[i]));
   }
 }
