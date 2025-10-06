@@ -215,4 +215,99 @@ class DatabaseService {
 
     return List.generate(maps.length, (i) => Post.fromMap(maps[i]));
   }
+  // ADD THESE METHODS TO YOUR EXISTING DatabaseService CLASS:
+
+// Study Groups table
+  Future<void> _createStudyGroupsTable(Database db) async {
+    await db.execute('''
+    CREATE TABLE IF NOT EXISTS study_groups(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL,
+      category TEXT NOT NULL,
+      icon_path TEXT,
+      created_at TEXT NOT NULL,
+      member_count INTEGER DEFAULT 0,
+      is_public INTEGER DEFAULT 1,
+      admin_id TEXT
+    )
+  ''');
+
+    // Insert default groups matching your wireframes
+    await db.insert('study_groups', {
+      'name': 'AI Study Group',
+      'description': 'Artificial Intelligence and Machine Learning discussions',
+      'category': 'AI',
+      'created_at': DateTime.now().toIso8601String(),
+      'member_count': 5,
+      'is_public': 1,
+    });
+
+    await db.insert('study_groups', {
+      'name': 'Mobile Dev Group',
+      'description': 'Mobile app development with Flutter and React Native',
+      'category': 'Mobile Dev',
+      'created_at': DateTime.now().toIso8601String(),
+      'member_count': 8,
+      'is_public': 1,
+    });
+
+    await db.insert('study_groups', {
+      'name': 'OS Study Group',
+      'description': 'Operating Systems concepts and implementation',
+      'category': 'OS',
+      'created_at': DateTime.now().toIso8601String(),
+      'member_count': 12,
+      'is_public': 1,
+    });
+  }
+
+// Study group operations
+  Future<List<StudyGroup>> getStudyGroups() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('study_groups');
+    return List.generate(maps.length, (i) => StudyGroup.fromMap(maps[i]));
+  }
+
+  Future<List<StudyGroup>> getUserGroups(String userId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+    SELECT sg.* FROM study_groups sg
+    INNER JOIN group_members gm ON sg.id = gm.group_id
+    WHERE gm.user_id = ?
+  ''', [userId]);
+    return List.generate(maps.length, (i) => StudyGroup.fromMap(maps[i]));
+  }
+
+  Future<int> insertStudyGroup(StudyGroup group) async {
+    final db = await database;
+    return await db.insert('study_groups', group.toMap());
+  }
+
+  Future<void> joinGroup(int groupId, String userId) async {
+    final db = await database;
+    await db.insert('group_members', {
+      'group_id': groupId,
+      'user_id': userId,
+      'joined_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<void> leaveGroup(int groupId, String userId) async {
+    final db = await database;
+    await db.delete('group_members',
+        where: 'group_id = ? AND user_id = ?',
+        whereArgs: [groupId, userId]);
+  }
+
+  Future<List<StudyGroup>> searchStudyGroups(String query) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'study_groups',
+      where: 'name LIKE ? OR description LIKE ?',
+      whereArgs: ['%$query%', '%$query%'],
+    );
+    return List.generate(maps.length, (i) => StudyGroup.fromMap(maps[i]));
+  }
+
 }
