@@ -1,18 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
-import '../providers/post_provider.dart';
+import '../../core/providers/auth_provider.dart';
+import '../../core/providers/post_provider.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/custom_button.dart';
-import '../models/post_model.dart';
+import '../../core/models/post_model.dart';
 
 class PostFeedScreen extends StatefulWidget {
   final int? groupId;
 
-  const PostFeedScreen({
-    super.key,
-    this.groupId,
-  });
+  const PostFeedScreen({Key? key, this.groupId}) : super(key: key);
 
   @override
   State<PostFeedScreen> createState() => _PostFeedScreenState();
@@ -34,28 +31,27 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         title: Text(
           widget.groupId != null ? 'Group Posts' : 'All Posts',
-          style: const TextStyle(fontWeight: FontWeight.bold),
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
         ),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Colors.white,
-        elevation: 2,
         actions: [
           IconButton(
-            onPressed: () => _showCreatePostDialog(context),
+            onPressed: _showCreatePostDialog,
             icon: const Icon(Icons.add),
-            tooltip: 'Create Post',
           ),
         ],
       ),
       body: Consumer<PostProvider>(
         builder: (context, postProvider, child) {
           if (postProvider.isLoading && postProvider.posts.isEmpty) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
+            return const Center(child: CircularProgressIndicator());
           }
 
           if (postProvider.errorMessage != null) {
@@ -65,11 +61,11 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
                 children: [
                   Icon(
                     Icons.error_outline,
-                    size: 48,
-                    color: Colors.red[300],
+                    size: 64,
+                    color: Theme.of(context).colorScheme.error,
                   ),
                   const SizedBox(height: 16),
-                  Text('Error: ${postProvider.errorMessage}'),
+                  Text('Error: \${postProvider.errorMessage}'),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () {
@@ -95,7 +91,7 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
               }
             },
             child: postProvider.posts.isEmpty
-                ? _buildEmptyState()
+                ? const Center(child: Text('No posts yet'))
                 : ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: postProvider.posts.length,
@@ -110,53 +106,17 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.post_add,
-            size: 64,
-            color: Colors.grey[400],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No posts yet',
-            style: TextStyle(
-              fontSize: 18,
-              color: Colors.grey[600],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Be the first to share something!',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[500],
-            ),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () => _showCreatePostDialog(context),
-            icon: const Icon(Icons.add),
-            label: const Text('Create Post'),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildPostCard(BuildContext context, Post post) {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Author info
+            // Header
             Row(
               children: [
                 CircleAvatar(
@@ -164,8 +124,8 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   child: Text(
                     post.authorName[0].toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onPrimary,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -177,68 +137,50 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
                     children: [
                       Text(
                         post.authorName,
-                        style: const TextStyle(
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.bold,
-                          fontSize: 14,
                         ),
                       ),
                       Text(
                         _formatTime(post.createdAt),
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 12,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
                   ),
                 ),
-                PopupMenuButton<String>(
-                  onSelected: (value) {
-                    switch (value) {
-                      case 'report':
-                        _reportPost(post);
-                        break;
-                    }
-                  },
+                PopupMenuButton(
                   itemBuilder: (context) => [
                     const PopupMenuItem(
                       value: 'report',
                       child: Row(
                         children: [
-                          Icon(Icons.report),
+                          Icon(Icons.flag_outlined),
                           SizedBox(width: 8),
                           Text('Report'),
                         ],
                       ),
                     ),
                   ],
+                  onSelected: (value) {
+                    if (value == 'report') {
+                      _reportPost(post);
+                    }
+                  },
                 ),
               ],
             ),
-
             const SizedBox(height: 12),
 
-            // Post title
-            if (post.title.isNotEmpty)
-              Text(
-                post.title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-
-            const SizedBox(height: 8),
-
-            // Post content
+            // Content
             Text(
               post.content,
-              style: const TextStyle(fontSize: 14),
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
+            const SizedBox(height: 16),
 
-            const SizedBox(height: 12),
-
-            // Action buttons
+            // Actions
             Row(
               children: [
                 Consumer<AuthProvider>(
@@ -251,23 +193,17 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
                         context.read<PostProvider>().toggleLike(post.id!, currentUser.id.toString());
                       },
                       icon: const Icon(Icons.thumb_up_outlined),
-                      label: Text('${post.likesCount}'),
+                      label: Text('\${post.likes.length} Likes'),
                     );
                   },
                 ),
+                const SizedBox(width: 16),
                 TextButton.icon(
                   onPressed: () {
-                    // TODO: Show comments
+                    // TODO: Open comments
                   },
                   icon: const Icon(Icons.comment_outlined),
-                  label: Text('${post.commentsCount}'),
-                ),
-                TextButton.icon(
-                  onPressed: () {
-                    // TODO: Share post
-                  },
-                  icon: const Icon(Icons.share_outlined),
-                  label: const Text('Share'),
+                  label: Text('\${post.comments.length} Comments'),
                 ),
               ],
             ),
@@ -277,16 +213,16 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
     );
   }
 
-  String _formatTime(DateTime timestamp) {
+  String _formatTime(DateTime dateTime) {
     final now = DateTime.now();
-    final diff = now.difference(timestamp);
+    final difference = now.difference(dateTime);
 
-    if (diff.inDays > 0) {
-      return '${diff.inDays}d ago';
-    } else if (diff.inHours > 0) {
-      return '${diff.inHours}h ago';
-    } else if (diff.inMinutes > 0) {
-      return '${diff.inMinutes}m ago';
+    if (difference.inDays > 0) {
+      return '\${difference.inDays}d ago';
+    } else if (difference.inHours > 0) {
+      return '\${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '\${difference.inMinutes}m ago';
     } else {
       return 'Just now';
     }
@@ -297,7 +233,7 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Report Post'),
-        content: const Text('Are you sure you want to report this post for inappropriate content?'),
+        content: const Text('Are you sure you want to report this post?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -307,7 +243,7 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
             onPressed: () {
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Post reported successfully')),
+                const SnackBar(content: Text('Post reported')),
               );
             },
             child: const Text('Report'),
@@ -317,51 +253,43 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
     );
   }
 
-  void _showCreatePostDialog(BuildContext context) {
+  void _showCreatePostDialog() {
     final titleController = TextEditingController();
     final contentController = TextEditingController();
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Create New Post'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CustomTextField(
-                controller: titleController,
-                label: 'Title',
-                hintText: 'Enter post title',
-              ),
-              const SizedBox(height: 16),
-              CustomTextField(
-                controller: contentController,
-                label: 'Content',
-                hintText: 'What would you like to share?',
-              ),
-            ],
-          ),
+        title: const Text('Create Post'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CustomTextField(
+              textController: titleController,
+              label: 'Title',
+              hintText: 'Enter post title',
+            ),
+            const SizedBox(height: 16),
+            CustomTextField(
+              textController: contentController,
+              label: 'Content',
+              hintText: 'What would you like to share?',
+            ),
+          ],
         ),
         actions: [
           TextButton(
-            onPressed: () {
-              titleController.dispose();
-              contentController.dispose();
-              Navigator.pop(context);
-            },
+            onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
           Consumer<AuthProvider>(
             builder: (context, authProvider, child) {
               final currentUser = authProvider.currentUser;
+              if (currentUser == null) return const SizedBox.shrink();
 
               return CustomButton(
                 text: 'Post',
-                type: ButtonType.primary,
-                onPressed: currentUser != null
-                    ? () async {
+                onPressed: () async {
                   if (titleController.text.trim().isNotEmpty &&
                       contentController.text.trim().isNotEmpty) {
                     await context.read<PostProvider>().createPost(
@@ -371,13 +299,9 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
                       authorName: currentUser.displayName,
                       groupId: widget.groupId,
                     );
-
-                    titleController.dispose();
-                    contentController.dispose();
                     Navigator.pop(context);
                   }
-                }
-                    : null,
+                },
               );
             },
           ),

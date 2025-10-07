@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import '../../services/database_service.dart';
 import '../models/message_model.dart';
 
@@ -33,42 +33,35 @@ class ChatProvider extends ChangeNotifier {
     try {
       return await _databaseService.getLastMessage(groupId);
     } catch (e) {
-      _errorMessage = e.toString();
-      notifyListeners();
       return null;
     }
   }
 
   Future<void> sendMessage({
     required int groupId,
-    required String content,
     required String senderId,
     required String senderName,
+    required String content,
     String? attachmentUrl,
   }) async {
     try {
       final message = Message(
         groupId: groupId,
-        content: content,
         senderId: senderId,
         senderName: senderName,
-        timestamp: DateTime.now(),
+        content: content,
         attachmentUrl: attachmentUrl,
+        timestamp: DateTime.now(),
       );
 
       final messageId = await _databaseService.insertMessage(message);
 
-      final newMessage = message.copyWith(id: messageId);
-      _messages.add(newMessage);
+      // Add to local list immediately for better UX
+      _messages.add(message.copyWith(id: messageId));
       notifyListeners();
     } catch (e) {
       _errorMessage = e.toString();
       notifyListeners();
     }
-  }
-
-  void clearMessages() {
-    _messages.clear();
-    notifyListeners();
   }
 }

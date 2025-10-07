@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import '../../services/database_service.dart';
 import '../models/post_model.dart';
 
@@ -62,15 +62,12 @@ class PostProvider extends ChangeNotifier {
         authorName: authorName,
         groupId: groupId,
         createdAt: DateTime.now(),
-        likesCount: 0,
-        commentsCount: 0,
-        attachmentUrls: attachmentUrls ?? [],
       );
 
       final postId = await _databaseService.insertPost(post);
 
-      final newPost = post.copyWith(id: postId);
-      _posts.insert(0, newPost);
+      // Add to local list
+      _posts.insert(0, post.copyWith(id: postId));
       notifyListeners();
     } catch (e) {
       _errorMessage = e.toString();
@@ -80,33 +77,27 @@ class PostProvider extends ChangeNotifier {
 
   Future<void> toggleLike(int postId, String userId) async {
     try {
-      final isCurrentlyLiked = await _databaseService.isPostLiked(postId, userId);
+      final isLiked = await _databaseService.isPostLiked(postId, userId);
       await _databaseService.toggleLike(postId, userId);
 
+      // Update local post
       final postIndex = _posts.indexWhere((post) => post.id == postId);
       if (postIndex != -1) {
         final post = _posts[postIndex];
-        _posts[postIndex] = post.copyWith(
-          likesCount: isCurrentlyLiked ? post.likesCount - 1 : post.likesCount + 1,
-        );
+        final updatedLikes = List<String>.from(post.likes);
+
+        if (isLiked) {
+          updatedLikes.remove(userId);
+        } else {
+          updatedLikes.add(userId);
+        }
+
+        _posts[postIndex] = post.copyWith(likes: updatedLikes);
         notifyListeners();
       }
     } catch (e) {
       _errorMessage = e.toString();
       notifyListeners();
     }
-  }
-
-  Future<bool> isPostLiked(int postId, String userId) async {
-    try {
-      return await _databaseService.isPostLiked(postId, userId);
-    } catch (e) {
-      return false;
-    }
-  }
-
-  void clearPosts() {
-    _posts.clear();
-    notifyListeners();
   }
 }

@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import '../../services/database_service.dart';
 import '../models/study_group_model.dart';
 
@@ -52,6 +52,7 @@ class StudyGroupProvider extends ChangeNotifier {
     try {
       await _databaseService.joinGroup(groupId, userId);
 
+      // Update local state
       final group = _groups.firstWhere((g) => g.id == groupId);
       if (!_userGroups.any((g) => g.id == groupId)) {
         _userGroups.add(group);
@@ -67,6 +68,7 @@ class StudyGroupProvider extends ChangeNotifier {
     try {
       await _databaseService.leaveGroup(groupId, userId);
 
+      // Update local state
       _userGroups.removeWhere((g) => g.id == groupId);
       notifyListeners();
     } catch (e) {
@@ -75,23 +77,20 @@ class StudyGroupProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> createGroup(String name, String description, String createdBy) async {
+  Future<void> createGroup(String name, String description, String category) async {
     try {
       final group = StudyGroup(
         name: name,
         description: description,
-        createdBy: createdBy,
+        category: category,
+        createdBy: 'current_user', // Replace with actual user ID
         createdAt: DateTime.now(),
-        memberCount: 1,
-        imageUrl: null,
-        subject: 'General',
       );
 
       final groupId = await _databaseService.insertStudyGroup(group);
 
-      final newGroup = group.copyWith(id: groupId);
-      _groups.insert(0, newGroup);
-      _userGroups.add(newGroup);
+      // Add to local list
+      _groups.add(group.copyWith(id: groupId));
       notifyListeners();
     } catch (e) {
       _errorMessage = e.toString();
