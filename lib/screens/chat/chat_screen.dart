@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
+
 import '../../core/providers/auth_provider.dart';
 import '../../core/providers/chat_provider.dart';
-import '../../core/models/message_model.dart';
+import '../../core/models/study_group_model.dart';
 import '../../widgets/chat/message_bubble.dart';
 import '../../widgets/chat/message_input.dart';
 
@@ -19,21 +21,21 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final ScrollController _scrollController = ScrollController();
   final TextEditingController _messageController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ChatProvider>().loadMessages(widget.group.id!);
+      context.read<ChatProvider>().loadMessagesForGroup(widget.group.id!);
     });
   }
 
   @override
   void dispose() {
-    _scrollController.dispose();
     _messageController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -48,34 +50,22 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _sendMessage() async {
-    final message = _messageController.text.trim();
-    if (message.isEmpty) return;
+    if (_messageController.text.trim().isEmpty) return;
 
-    final authProvider = context.read<AuthProvider>();
-    final chatProvider = context.read<ChatProvider>();
-    final currentUser = authProvider.currentUser;
+    final currentUser = context.read<AuthProvider>().currentUser;
+    if (currentUser == null) return;
 
-    if (currentUser != null) {
-      _messageController.clear();
+    final content = _messageController.text.trim();
+    _messageController.clear();
 
-      await chatProvider.sendMessage(
-        senderId: currentUser.id.toString(),
-        senderName: currentUser.displayName,
-        groupId: widget.group.id!,
-        content: message,
-      );
-
-      _scrollToBottom();
-    }
-  }
-
-  void _sendAttachment() async {
-    // TODO: Implement file picker and attachment sending
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Attachment feature coming soon!'),
-      ),
+    await context.read<ChatProvider>().sendMessage(
+      groupId: widget.group.id!,
+      senderId: currentUser.id.toString(),
+      senderName: currentUser.displayName,
+      content: content,
     );
+
+    _scrollToBottom();
   }
 
   @override
@@ -85,16 +75,11 @@ class _ChatScreenState extends State<ChatScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text(widget.group.name),
             Text(
-              widget.group.name,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            Text(
-              widget.group.category,
+              '${widget.group.memberCount} members',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -103,7 +88,7 @@ class _ChatScreenState extends State<ChatScreen> {
           IconButton(
             icon: const Icon(Icons.info_outline),
             onPressed: () {
-              // TODO: Show group info
+              // Show group info
             },
           ),
         ],
@@ -117,15 +102,22 @@ class _ChatScreenState extends State<ChatScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                if (chatProvider.error != null) {
+                if (chatProvider.errorMessage != null) {
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text('Error: ${chatProvider.error}'),
+                        Icon(
+                          Icons.error_outline,
+                          size: 64,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                        const SizedBox(height: 16),
+                        Text('Error: ${chatProvider.errorMessage}'),
+                        const SizedBox(height: 16),
                         ElevatedButton(
                           onPressed: () {
-                            chatProvider.loadMessages(widget.group.id!);
+                            chatProvider.loadMessagesForGroup(widget.group.id!);
                           },
                           child: const Text('Retry'),
                         ),
@@ -138,8 +130,29 @@ class _ChatScreenState extends State<ChatScreen> {
                 final currentUser = authProvider.currentUser;
 
                 if (messages.isEmpty) {
-                  return const Center(
-                    child: Text('No messages yet. Start the conversation!'),
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.chat_bubble_outline,
+                          size: 64,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No messages yet',
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Be the first to start the conversation!',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
                   );
                 }
 
@@ -149,24 +162,31 @@ class _ChatScreenState extends State<ChatScreen> {
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final message = messages[index];
-                    final isOwnMessage = currentUser != null &&
-                        message.senderId == currentUser.id.toString();
+                    final isOwn = message.senderId == currentUser?.id.toString();
 
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: MessageBubble(
-                        message: message,
-                        isOwn: isOwnMessage,
-                      ),
+                    return MessageBubble(
+                      message: message,
+                      isOwn: isOwn,
                     );
                   },
                 );
               },
             ),
           ),
-          MessageInput(
-            onSendMessage: _sendMessage,
-            onSendAttachment: _sendAttachment,
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              border: Border(
+                top: BorderSide(
+                  color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                ),
+              ),
+            ),
+            child: MessageInput(
+              textController: _messageController,
+              onSendMessage: _sendMessage,
+            ),
           ),
         ],
       ),

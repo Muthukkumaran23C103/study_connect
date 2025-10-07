@@ -19,30 +19,32 @@ class Message {
     required this.timestamp,
   });
 
+  factory Message.fromMap(Map<String, dynamic> map) {
+    return Message(
+      id: map['id'],
+      groupId: map['group_id'] ?? 0,
+      senderId: map['sender_id'] ?? '',
+      senderName: map['sender_name'] ?? '',
+      content: map['content'] ?? '',
+      messageType: map['message_type'] ?? 'text',
+      attachmentUrl: map['attachment_url'],
+      timestamp: map['timestamp'] != null
+          ? DateTime.parse(map['timestamp'])
+          : DateTime.now(),
+    );
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'groupId': groupId,
-      'senderId': senderId,
-      'senderName': senderName,
+      'group_id': groupId,
+      'sender_id': senderId,
+      'sender_name': senderName,
       'content': content,
-      'messageType': messageType,
-      'attachmentUrl': attachmentUrl,
+      'message_type': messageType,
+      'attachment_url': attachmentUrl,
       'timestamp': timestamp.toIso8601String(),
     };
-  }
-
-  factory Message.fromMap(Map<String, dynamic> map) {
-    return Message(
-      id: map['id']?.toInt(),
-      groupId: map['groupId']?.toInt() ?? 0,
-      senderId: map['senderId'] ?? '',
-      senderName: map['senderName'] ?? '',
-      content: map['content'] ?? '',
-      messageType: map['messageType'] ?? 'text',
-      attachmentUrl: map['attachmentUrl'],
-      timestamp: DateTime.parse(map['timestamp'] ?? DateTime.now().toIso8601String()),
-    );
   }
 
   Message copyWith({

@@ -1,8 +1,7 @@
 import 'dart:async';
-import 'dart:io';
-import 'package:path/path.dart';
+import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart';
 import '../core/models/user_model.dart';
 import '../core/models/study_group_model.dart';
 import '../core/models/message_model.dart';
@@ -12,228 +11,255 @@ class DatabaseService {
   static DatabaseService? _instance;
   static Database? _database;
 
-  DatabaseService._internal();
-
   static DatabaseService get instance {
-    _instance ??= DatabaseService._internal();
+    _instance ??= DatabaseService._();
     return _instance!;
   }
 
+  DatabaseService._();
+
   Future<Database> get database async {
-    _database ??= await _initDB();
+    if (_database != null) return _database!;
+    _database = await _initDatabase();
     return _database!;
   }
 
-  Future<Database> _initDB() async {
-    try {
-      Directory documentsDirectory = await getApplicationDocumentsDirectory();
-      String path = join(documentsDirectory.path, 'study_connect.db');
-
-      return await openDatabase(
-        path,
-        version: 2,
-        onCreate: _onCreate,
-        onUpgrade: _onUpgrade,
-        onConfigure: _onConfigure,
-      );
-    } catch (e) {
-      print('Error initializing database: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> _onConfigure(Database db) async {
-    await db.execute('PRAGMA foreign_keys = ON');
+  Future<Database> _initDatabase() async {
+    String path = join(await getDatabasesPath(), 'study_connect.db');
+    return await openDatabase(
+      path,
+      version: 2,
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
+    );
   }
 
   Future<void> _onCreate(Database db, int version) async {
-    await _createTables(db);
-    await _insertDefaultData(db);
+    await db.execute('''
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        display_name TEXT NOT NULL,
+        year TEXT,
+        branch TEXT,
+        college TEXT,
+        avatar_path TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE study_groups (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT,
+        category TEXT NOT NULL,
+        created_by INTEGER NOT NULL,
+        member_count INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (created_by) REFERENCES users (id)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE group_memberships (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        group_id INTEGER NOT NULL,
+        joined_at TEXT NOT NULL,
+        FOREIGN KEY (group_id) REFERENCES study_groups (id)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        group_id INTEGER NOT NULL,
+        sender_id TEXT NOT NULL,
+        sender_name TEXT NOT NULL,
+        content TEXT NOT NULL,
+        message_type TEXT DEFAULT 'text',
+        attachment_url TEXT,
+        timestamp TEXT NOT NULL,
+        FOREIGN KEY (group_id) REFERENCES study_groups (id)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE posts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        author_id TEXT NOT NULL,
+        author_name TEXT NOT NULL,
+        group_id INTEGER,
+        likes_count INTEGER DEFAULT 0,
+        comments_count INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (group_id) REFERENCES study_groups (id)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE post_likes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        post_id INTEGER NOT NULL,
+        user_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (post_id) REFERENCES posts (id)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE comments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        post_id INTEGER NOT NULL,
+        author_id TEXT NOT NULL,
+        author_name TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (post_id) REFERENCES posts (id)
+      )
+    ''');
+
+    // Insert default study groups
+    await _insertDefaultGroups(db);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
-      await _createStudyGroupTables(db);
-      await _createMessageTables(db);
-      await _createPostTables(db);
-      await _insertDefaultData(db);
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS study_groups (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          description TEXT,
+          category TEXT NOT NULL,
+          created_by INTEGER NOT NULL,
+          member_count INTEGER DEFAULT 0,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (created_by) REFERENCES users (id)
+        )
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS group_memberships (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id TEXT NOT NULL,
+          group_id INTEGER NOT NULL,
+          joined_at TEXT NOT NULL,
+          FOREIGN KEY (group_id) REFERENCES study_groups (id)
+        )
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS messages (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          group_id INTEGER NOT NULL,
+          sender_id TEXT NOT NULL,
+          sender_name TEXT NOT NULL,
+          content TEXT NOT NULL,
+          message_type TEXT DEFAULT 'text',
+          attachment_url TEXT,
+          timestamp TEXT NOT NULL,
+          FOREIGN KEY (group_id) REFERENCES study_groups (id)
+        )
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS posts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL,
+          content TEXT NOT NULL,
+          author_id TEXT NOT NULL,
+          author_name TEXT NOT NULL,
+          group_id INTEGER,
+          likes_count INTEGER DEFAULT 0,
+          comments_count INTEGER DEFAULT 0,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (group_id) REFERENCES study_groups (id)
+        )
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS post_likes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          post_id INTEGER NOT NULL,
+          user_id TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (post_id) REFERENCES posts (id)
+        )
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS comments (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          post_id INTEGER NOT NULL,
+          author_id TEXT NOT NULL,
+          author_name TEXT NOT NULL,
+          content TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (post_id) REFERENCES posts (id)
+        )
+      ''');
+
+      await _insertDefaultGroups(db);
     }
   }
 
-  Future<void> _createTables(Database db) async {
-    await db.execute('''
-      CREATE TABLE users(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
-        displayName TEXT NOT NULL,
-        college TEXT NOT NULL,
-        department TEXT NOT NULL,
-        year INTEGER NOT NULL,
-        avatarPath TEXT,
-        createdAt TEXT NOT NULL,
-        updatedAt TEXT NOT NULL
-      )
-    ''');
+  Future<void> _insertDefaultGroups(Database db) async {
+    final now = DateTime.now().toIso8601String();
 
-    await _createStudyGroupTables(db);
-    await _createMessageTables(db);
-    await _createPostTables(db);
-  }
+    await db.insert('study_groups', {
+      'name': 'AI & Machine Learning',
+      'description': 'Learn and discuss artificial intelligence, machine learning algorithms, neural networks, and AI applications.',
+      'category': 'AI',
+      'created_by': 1,
+      'member_count': 0,
+      'created_at': now,
+    });
 
-  Future<void> _createStudyGroupTables(Database db) async {
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS study_groups(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        description TEXT NOT NULL,
-        category TEXT NOT NULL,
-        isPublic INTEGER NOT NULL DEFAULT 1,
-        createdBy TEXT NOT NULL,
-        createdAt TEXT NOT NULL
-      )
-    ''');
+    await db.insert('study_groups', {
+      'name': 'Mobile Development',
+      'description': 'Flutter, React Native, Android, iOS development discussions and project collaborations.',
+      'category': 'DEV',
+      'created_by': 1,
+      'member_count': 0,
+      'created_at': now,
+    });
 
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS group_memberships(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        userId TEXT NOT NULL,
-        groupId INTEGER NOT NULL,
-        role TEXT NOT NULL DEFAULT 'member',
-        joinedAt TEXT NOT NULL,
-        FOREIGN KEY (groupId) REFERENCES study_groups (id) ON DELETE CASCADE
-      )
-    ''');
-  }
-
-  Future<void> _createMessageTables(Database db) async {
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS messages(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        groupId INTEGER NOT NULL,
-        senderId TEXT NOT NULL,
-        senderName TEXT NOT NULL,
-        content TEXT NOT NULL,
-        messageType TEXT NOT NULL DEFAULT 'text',
-        attachmentUrl TEXT,
-        timestamp TEXT NOT NULL,
-        FOREIGN KEY (groupId) REFERENCES study_groups (id) ON DELETE CASCADE
-      )
-    ''');
-  }
-
-  Future<void> _createPostTables(Database db) async {
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS posts(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        authorId TEXT NOT NULL,
-        authorName TEXT NOT NULL,
-        groupId INTEGER,
-        title TEXT NOT NULL,
-        content TEXT NOT NULL,
-        attachmentUrl TEXT,
-        likesCount INTEGER NOT NULL DEFAULT 0,
-        commentsCount INTEGER NOT NULL DEFAULT 0,
-        createdAt TEXT NOT NULL,
-        FOREIGN KEY (groupId) REFERENCES study_groups (id) ON DELETE SET NULL
-      )
-    ''');
-
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS post_likes(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        postId INTEGER NOT NULL,
-        userId TEXT NOT NULL,
-        createdAt TEXT NOT NULL,
-        FOREIGN KEY (postId) REFERENCES posts (id) ON DELETE CASCADE,
-        UNIQUE(postId, userId)
-      )
-    ''');
-
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS comments(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        postId INTEGER NOT NULL,
-        userId TEXT NOT NULL,
-        userName TEXT NOT NULL,
-        content TEXT NOT NULL,
-        createdAt TEXT NOT NULL,
-        FOREIGN KEY (postId) REFERENCES posts (id) ON DELETE CASCADE
-      )
-    ''');
-  }
-
-  Future<void> _insertDefaultData(Database db) async {
-    final count = await db.rawQuery('SELECT COUNT(*) as count FROM study_groups');
-    final groupCount = count.first['count'] as int;
-
-    if (groupCount == 0) {
-      await db.insert('study_groups', {
-        'name': 'AI & Machine Learning',
-        'description': 'Learn and discuss artificial intelligence, machine learning algorithms, neural networks, and deep learning concepts.',
-        'category': 'AI',
-        'isPublic': 1,
-        'createdBy': 'system',
-        'createdAt': DateTime.now().toIso8601String(),
-      });
-
-      await db.insert('study_groups', {
-        'name': 'Mobile Development',
-        'description': 'Flutter, React Native, Android, iOS development discussions and project collaborations.',
-        'category': 'Mobile',
-        'isPublic': 1,
-        'createdBy': 'system',
-        'createdAt': DateTime.now().toIso8601String(),
-      });
-
-      await db.insert('study_groups', {
-        'name': 'Operating Systems',
-        'description': 'Study operating system concepts, process management, memory management, and system programming.',
-        'category': 'OS',
-        'isPublic': 1,
-        'createdBy': 'system',
-        'createdAt': DateTime.now().toIso8601String(),
-      });
-    }
+    await db.insert('study_groups', {
+      'name': 'Operating Systems',
+      'description': 'Study operating system concepts, kernel programming, system calls, and OS architecture.',
+      'category': 'OS',
+      'created_by': 1,
+      'member_count': 0,
+      'created_at': now,
+    });
   }
 
   // User operations
-  Future<int> insertUser(UserModel user) async {
-    final db = await database;
-    return await db.insert('users', user.toMap());
-  }
-
   Future<UserModel?> getUserByEmail(String email) async {
     final db = await database;
-    final maps = await db.query(
+    final List<Map<String, dynamic>> maps = await db.query(
       'users',
       where: 'email = ?',
       whereArgs: [email],
     );
 
-    if (maps.isNotEmpty) {
-      return UserModel.fromMap(maps.first);
-    }
-    return null;
+    if (maps.isEmpty) return null;
+    return UserModel.fromMap(maps.first);
   }
 
-  Future<UserModel?> getUserById(String userId) async {
+  Future<int> insertUser(UserModel user) async {
     final db = await database;
-    final maps = await db.query(
-      'users',
-      where: 'id = ?',
-      whereArgs: [userId],
-    );
-
-    if (maps.isNotEmpty) {
-      return UserModel.fromMap(maps.first);
-    }
-    return null;
+    return await db.insert('users', user.toMap());
   }
 
-  Future<int> updateUser(UserModel user) async {
+  Future<void> updateUser(UserModel user) async {
     final db = await database;
-    return await db.update(
+    await db.update(
       'users',
       user.toMap(),
       where: 'id = ?',
@@ -244,29 +270,18 @@ class DatabaseService {
   // Study Group operations
   Future<List<StudyGroup>> getStudyGroups() async {
     final db = await database;
-    final maps = await db.query('study_groups', orderBy: 'createdAt DESC');
-
-    List<StudyGroup> groups = [];
-    for (int i = 0; i < maps.length; i++) {
-      groups.add(StudyGroup.fromMap(maps[i]));
-    }
-    return groups;
+    final List<Map<String, dynamic>> maps = await db.query('study_groups');
+    return List.generate(maps.length, (i) => StudyGroup.fromMap(maps[i]));
   }
 
   Future<List<StudyGroup>> getUserGroups(String userId) async {
     final db = await database;
-    final maps = await db.rawQuery('''
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
       SELECT sg.* FROM study_groups sg
-      JOIN group_memberships gm ON sg.id = gm.groupId
-      WHERE gm.userId = ?
-      ORDER BY sg.createdAt DESC
+      INNER JOIN group_memberships gm ON sg.id = gm.group_id
+      WHERE gm.user_id = ?
     ''', [userId]);
-
-    List<StudyGroup> groups = [];
-    for (int i = 0; i < maps.length; i++) {
-      groups.add(StudyGroup.fromMap(maps[i]));
-    }
-    return groups;
+    return List.generate(maps.length, (i) => StudyGroup.fromMap(maps[i]));
   }
 
   Future<int> insertStudyGroup(StudyGroup group) async {
@@ -277,27 +292,40 @@ class DatabaseService {
   Future<void> joinGroup(int groupId, String userId) async {
     final db = await database;
     await db.insert('group_memberships', {
-      'userId': userId,
-      'groupId': groupId,
-      'role': 'member',
-      'joinedAt': DateTime.now().toIso8601String(),
+      'user_id': userId,
+      'group_id': groupId,
+      'joined_at': DateTime.now().toIso8601String(),
     });
+
+    // Update member count
+    await db.rawUpdate('''
+      UPDATE study_groups 
+      SET member_count = member_count + 1 
+      WHERE id = ?
+    ''', [groupId]);
   }
 
   Future<void> leaveGroup(int groupId, String userId) async {
     final db = await database;
     await db.delete(
       'group_memberships',
-      where: 'groupId = ? AND userId = ?',
+      where: 'group_id = ? AND user_id = ?',
       whereArgs: [groupId, userId],
     );
+
+    // Update member count
+    await db.rawUpdate('''
+      UPDATE study_groups 
+      SET member_count = CASE WHEN member_count > 0 THEN member_count - 1 ELSE 0 END 
+      WHERE id = ?
+    ''', [groupId]);
   }
 
   Future<bool> isUserInGroup(int groupId, String userId) async {
     final db = await database;
-    final maps = await db.query(
+    final List<Map<String, dynamic>> maps = await db.query(
       'group_memberships',
-      where: 'groupId = ? AND userId = ?',
+      where: 'group_id = ? AND user_id = ?',
       whereArgs: [groupId, userId],
     );
     return maps.isNotEmpty;
@@ -305,141 +333,123 @@ class DatabaseService {
 
   Future<List<StudyGroup>> searchStudyGroups(String query) async {
     final db = await database;
-    final maps = await db.query(
+    final List<Map<String, dynamic>> maps = await db.query(
       'study_groups',
       where: 'name LIKE ? OR description LIKE ?',
       whereArgs: ['%$query%', '%$query%'],
-      orderBy: 'createdAt DESC',
     );
-
-    List<StudyGroup> groups = [];
-    for (int i = 0; i < maps.length; i++) {
-      groups.add(StudyGroup.fromMap(maps[i]));
-    }
-    return groups;
+    return List.generate(maps.length, (i) => StudyGroup.fromMap(maps[i]));
   }
 
   // Message operations
+  Future<List<Message>> getMessagesForGroup(int groupId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'messages',
+      where: 'group_id = ?',
+      whereArgs: [groupId],
+      orderBy: 'timestamp ASC',
+    );
+    return List.generate(maps.length, (i) => Message.fromMap(maps[i]));
+  }
+
   Future<int> insertMessage(Message message) async {
     final db = await database;
     return await db.insert('messages', message.toMap());
   }
 
-  Future<List<Message>> getMessagesForGroup(int groupId, {int limit = 50}) async {
-    final db = await database;
-    final maps = await db.query(
-      'messages',
-      where: 'groupId = ?',
-      whereArgs: [groupId],
-      orderBy: 'timestamp DESC',
-      limit: limit,
-    );
-
-    List<Message> messages = [];
-    for (int i = 0; i < maps.length; i++) {
-      messages.add(Message.fromMap(maps[i]));
-    }
-    return messages.reversed.toList();
-  }
-
   Future<Message?> getLastMessage(int groupId) async {
     final db = await database;
-    final maps = await db.query(
+    final List<Map<String, dynamic>> maps = await db.query(
       'messages',
-      where: 'groupId = ?',
+      where: 'group_id = ?',
       whereArgs: [groupId],
       orderBy: 'timestamp DESC',
       limit: 1,
     );
 
-    if (maps.isNotEmpty) {
-      return Message.fromMap(maps.first);
-    }
-    return null;
+    if (maps.isEmpty) return null;
+    return Message.fromMap(maps.first);
   }
 
   // Post operations
+  Future<List<Post>> getAllPosts() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'posts',
+      orderBy: 'created_at DESC',
+    );
+    return List.generate(maps.length, (i) => Post.fromMap(maps[i]));
+  }
+
+  Future<List<Post>> getGroupPosts(int groupId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'posts',
+      where: 'group_id = ?',
+      whereArgs: [groupId],
+      orderBy: 'created_at DESC',
+    );
+    return List.generate(maps.length, (i) => Post.fromMap(maps[i]));
+  }
+
   Future<int> insertPost(Post post) async {
     final db = await database;
     return await db.insert('posts', post.toMap());
   }
 
-  Future<List<Post>> getAllPosts({int limit = 20}) async {
-    final db = await database;
-    final maps = await db.query(
-      'posts',
-      orderBy: 'createdAt DESC',
-      limit: limit,
-    );
-
-    List<Post> posts = [];
-    for (int i = 0; i < maps.length; i++) {
-      posts.add(Post.fromMap(maps[i]));
-    }
-    return posts;
-  }
-
-  Future<List<Post>> getGroupPosts(int groupId, {int limit = 20}) async {
-    final db = await database;
-    final maps = await db.query(
-      'posts',
-      where: 'groupId = ?',
-      whereArgs: [groupId],
-      orderBy: 'createdAt DESC',
-      limit: limit,
-    );
-
-    List<Post> posts = [];
-    for (int i = 0; i < maps.length; i++) {
-      posts.add(Post.fromMap(maps[i]));
-    }
-    return posts;
-  }
-
   Future<void> toggleLike(int postId, String userId) async {
     final db = await database;
 
-    final existingLike = await db.query(
+    // Check if user already liked the post
+    final List<Map<String, dynamic>> existingLike = await db.query(
       'post_likes',
-      where: 'postId = ? AND userId = ?',
+      where: 'post_id = ? AND user_id = ?',
       whereArgs: [postId, userId],
     );
 
-    if (existingLike.isNotEmpty) {
-      // Unlike
+    if (existingLike.isEmpty) {
+      // Add like
+      await db.insert('post_likes', {
+        'post_id': postId,
+        'user_id': userId,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      // Update likes count
+      await db.rawUpdate('''
+        UPDATE posts 
+        SET likes_count = likes_count + 1 
+        WHERE id = ?
+      ''', [postId]);
+    } else {
+      // Remove like
       await db.delete(
         'post_likes',
-        where: 'postId = ? AND userId = ?',
+        where: 'post_id = ? AND user_id = ?',
         whereArgs: [postId, userId],
       );
-      await db.execute(
-        'UPDATE posts SET likesCount = likesCount - 1 WHERE id = ?',
-        [postId],
-      );
-    } else {
-      // Like
-      await db.insert('post_likes', {
-        'postId': postId,
-        'userId': userId,
-        'createdAt': DateTime.now().toIso8601String(),
-      });
-      await db.execute(
-        'UPDATE posts SET likesCount = likesCount + 1 WHERE id = ?',
-        [postId],
-      );
+
+      // Update likes count
+      await db.rawUpdate('''
+        UPDATE posts 
+        SET likes_count = CASE WHEN likes_count > 0 THEN likes_count - 1 ELSE 0 END 
+        WHERE id = ?
+      ''', [postId]);
     }
   }
 
   Future<bool> isPostLiked(int postId, String userId) async {
     final db = await database;
-    final maps = await db.query(
+    final List<Map<String, dynamic>> maps = await db.query(
       'post_likes',
-      where: 'postId = ? AND userId = ?',
+      where: 'post_id = ? AND user_id = ?',
       whereArgs: [postId, userId],
     );
     return maps.isNotEmpty;
   }
 
+  // Close database
   Future<void> close() async {
     final db = await database;
     await db.close();

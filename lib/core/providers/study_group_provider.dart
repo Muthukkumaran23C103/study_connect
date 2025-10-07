@@ -7,20 +7,24 @@ class StudyGroupProvider extends ChangeNotifier {
   List<StudyGroup> _groups = [];
   List<StudyGroup> _userGroups = [];
   bool _isLoading = false;
+  String? _errorMessage;
 
   List<StudyGroup> get groups => _groups;
   List<StudyGroup> get userGroups => _userGroups;
   bool get isLoading => _isLoading;
+  String? get errorMessage => _errorMessage;
 
   Future<void> loadGroups() async {
-    _isLoading = true;
-    notifyListeners();
-
     try {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+
       _groups = await _databaseService.getStudyGroups();
       notifyListeners();
     } catch (e) {
-      print('Error loading groups: $e');
+      _errorMessage = e.toString();
+      notifyListeners();
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -28,14 +32,16 @@ class StudyGroupProvider extends ChangeNotifier {
   }
 
   Future<void> loadUserGroups(String userId) async {
-    _isLoading = true;
-    notifyListeners();
-
     try {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+
       _userGroups = await _databaseService.getUserGroups(userId);
       notifyListeners();
     } catch (e) {
-      print('Error loading user groups: $e');
+      _errorMessage = e.toString();
+      notifyListeners();
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -46,13 +52,22 @@ class StudyGroupProvider extends ChangeNotifier {
     try {
       await _databaseService.joinGroup(groupId, userId);
 
+      // Update the local lists
       final group = _groups.firstWhere((g) => g.id == groupId);
       if (!_userGroups.any((g) => g.id == groupId)) {
         _userGroups.add(group);
-        notifyListeners();
       }
+
+      // Update member count
+      final groupIndex = _groups.indexWhere((g) => g.id == groupId);
+      if (groupIndex != -1) {
+        _groups[groupIndex] = group.copyWith(memberCount: group.memberCount + 1);
+      }
+
+      notifyListeners();
     } catch (e) {
-      print('Error joining group: $e');
+      _errorMessage = e.toString();
+      notifyListeners();
     }
   }
 
@@ -60,10 +75,22 @@ class StudyGroupProvider extends ChangeNotifier {
     try {
       await _databaseService.leaveGroup(groupId, userId);
 
+      // Update the local lists
       _userGroups.removeWhere((g) => g.id == groupId);
+
+      // Update member count
+      final groupIndex = _groups.indexWhere((g) => g.id == groupId);
+      if (groupIndex != -1) {
+        final group = _groups[groupIndex];
+        _groups[groupIndex] = group.copyWith(
+          memberCount: group.memberCount > 0 ? group.memberCount - 1 : 0,
+        );
+      }
+
       notifyListeners();
     } catch (e) {
-      print('Error leaving group: $e');
+      _errorMessage = e.toString();
+      notifyListeners();
     }
   }
 
@@ -71,54 +98,55 @@ class StudyGroupProvider extends ChangeNotifier {
     required String name,
     required String description,
     required String category,
-    required String createdBy,
-    bool isPublic = true,
+    required int createdBy,
   }) async {
     try {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+
       final group = StudyGroup(
         name: name,
         description: description,
         category: category,
-        isPublic: isPublic,
         createdBy: createdBy,
         createdAt: DateTime.now(),
       );
 
       final groupId = await _databaseService.insertStudyGroup(group);
+
+      // Add the new group to the local list
       final newGroup = group.copyWith(id: groupId);
-      _groups.insert(0, newGroup);
-
-      // Auto-join the creator
-      await joinGroup(groupId, createdBy);
-
+      _groups.add(newGroup);
       notifyListeners();
     } catch (e) {
-      print('Error creating group: $e');
-    }
-  }
-
-  Future<void> searchGroups(String query) async {
-    _isLoading = true;
-    notifyListeners();
-
-    try {
-      _groups = await _databaseService.searchStudyGroups(query);
+      _errorMessage = e.toString();
       notifyListeners();
-    } catch (e) {
-      print('Error searching groups: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  Future<bool> isUserInGroup(int groupId, String userId) async {
+  Future<void> searchGroups(String query) async {
     try {
-      return await _databaseService.isUserInGroup(groupId, userId);
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+
+      _groups = await _databaseService.searchStudyGroups(query);
+      notifyListeners();
     } catch (e) {
-      print('Error checking group membership: $e');
-      return false;
+      _errorMessage = e.toString();
+      notifyListeners();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
+  }
+
+  bool isUserInGroup(int groupId, String userId) {
+    return _userGroups.any((group) => group.id == groupId);
   }
 
   StudyGroup? getGroupById(int groupId) {
@@ -132,6 +160,12 @@ class StudyGroupProvider extends ChangeNotifier {
   void clearGroups() {
     _groups.clear();
     _userGroups.clear();
+    _errorMessage = null;
+    notifyListeners();
+  }
+
+  void clearError() {
+    _errorMessage = null;
     notifyListeners();
   }
 }

@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
 class MessageInput extends StatefulWidget {
+  final TextEditingController textController;
   final VoidCallback onSendMessage;
-  final VoidCallback onSendAttachment;
 
   const MessageInput({
     super.key,
+    required this.textController,
     required this.onSendMessage,
-    required this.onSendAttachment,
   });
 
   @override
@@ -15,96 +15,95 @@ class MessageInput extends StatefulWidget {
 }
 
 class _MessageInputState extends State<MessageInput> {
-  final TextEditingController _controller = TextEditingController();
-  bool _hasText = false;
+  bool _isTextNotEmpty = false;
 
   @override
   void initState() {
     super.initState();
-    _controller.addListener(_onTextChanged);
+    widget.textController.addListener(_onTextChanged);
   }
 
   @override
   void dispose() {
-    _controller.removeListener(_onTextChanged);
-    _controller.dispose();
+    widget.textController.removeListener(_onTextChanged);
     super.dispose();
   }
 
   void _onTextChanged() {
-    setState(() {
-      _hasText = _controller.text.trim().isNotEmpty;
-    });
+    final isNotEmpty = widget.textController.text.trim().isNotEmpty;
+    if (isNotEmpty != _isTextNotEmpty) {
+      setState(() {
+        _isTextNotEmpty = isNotEmpty;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    return Row(
+      children: [
+        // Attachment button
+        IconButton(
+          icon: Icon(
+            Icons.attach_file,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          onPressed: () {
+            // TODO: Implement attachment functionality
+          },
+        ),
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        border: Border(
-          top: BorderSide(
-            color: colorScheme.outline.withOpacity(0.2),
-            width: 1,
+        // Text input
+        Expanded(
+          child: Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceVariant,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: TextField(
+              controller: widget.textController,
+              decoration: InputDecoration(
+                hintText: 'Type a message...',
+                hintStyle: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+              maxLines: null,
+              textCapitalization: TextCapitalization.sentences,
+              onSubmitted: (_) => _isTextNotEmpty ? widget.onSendMessage() : null,
+            ),
           ),
         ),
-      ),
-      child: SafeArea(
-        child: Row(
-          children: [
-            IconButton(
-              onPressed: widget.onSendAttachment,
-              icon: const Icon(Icons.attach_file),
-              color: colorScheme.onSurfaceVariant,
+
+        const SizedBox(width: 8),
+
+        // Send button
+        Container(
+          decoration: BoxDecoration(
+            color: _isTextNotEmpty
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.surfaceVariant,
+            shape: BoxShape.circle,
+          ),
+          child: IconButton(
+            icon: Icon(
+              Icons.send_rounded,
+              color: _isTextNotEmpty
+                  ? Theme.of(context).colorScheme.onPrimary
+                  : Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
             ),
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceVariant.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: TextField(
-                  controller: _controller,
-                  maxLines: null,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: InputDecoration(
-                    hintText: 'Type a message...',
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                    border: InputBorder.none,
-                    hintStyle: TextStyle(
-                      color: colorScheme.onSurfaceVariant.withOpacity(0.6),
-                    ),
-                  ),
-                  onSubmitted: _hasText ? (_) => widget.onSendMessage() : null,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              decoration: BoxDecoration(
-                color: _hasText ? colorScheme.primary : Colors.transparent,
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                onPressed: _hasText ? widget.onSendMessage : null,
-                icon: Icon(
-                  Icons.send,
-                  color: _hasText
-                      ? colorScheme.onPrimary
-                      : colorScheme.onSurfaceVariant.withOpacity(0.4),
-                ),
-              ),
-            ),
-          ],
+            onPressed: _isTextNotEmpty ? widget.onSendMessage : null,
+          ),
         ),
-      ),
+      ],
     );
   }
 }
