@@ -9,7 +9,10 @@ import '../../widgets/chat/message_input.dart';
 class ChatScreen extends StatefulWidget {
   final StudyGroup group;
 
-  const ChatScreen({Key? key, required this.group}) : super(key: key);
+  const ChatScreen({
+    super.key,
+    required this.group,
+  });
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -47,58 +50,29 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        title: Row(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              child: Text(
-                widget.group.name[0].toUpperCase(),
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onPrimary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.group.name,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    widget.group.description,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
+            Text(widget.group.name),
+            Text(
+              '${widget.group.memberCount} members',
+              style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
         ),
         actions: [
           IconButton(
-            onPressed: () {
-              // Group info screen
-            },
             icon: const Icon(Icons.info_outline),
+            onPressed: () {
+              // TODO: Show group info
+            },
           ),
         ],
       ),
       body: Column(
         children: [
+          // Messages List
           Expanded(
             child: Consumer<ChatProvider>(
               builder: (context, chatProvider, child) {
@@ -113,14 +87,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
-                          Icons.error_outline,
-                          size: 64,
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                        const SizedBox(height: 16),
-                        Text('Error: \${chatProvider.errorMessage}'),
-                        const SizedBox(height: 16),
+                        Text('Error: ${chatProvider.errorMessage}'),
                         ElevatedButton(
                           onPressed: () {
                             chatProvider.loadMessagesForGroup(widget.group.id!);
@@ -133,14 +100,11 @@ class _ChatScreenState extends State<ChatScreen> {
                 }
 
                 final messages = chatProvider.messages;
-
                 if (messages.isEmpty) {
                   return const Center(
                     child: Text('No messages yet. Start the conversation!'),
                   );
                 }
-
-                WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
 
                 return ListView.builder(
                   controller: _scrollController,
@@ -149,13 +113,13 @@ class _ChatScreenState extends State<ChatScreen> {
                   itemBuilder: (context, index) {
                     final message = messages[index];
                     final currentUser = context.read<AuthProvider>().currentUser;
-                    final isOwnMessage = message.senderId == currentUser?.id.toString();
+                    final isOwn = message.senderId == currentUser?.id.toString();
 
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: MessageBubble(
                         message: message,
-                        isOwn: isOwnMessage,
+                        isOwn: isOwn, // Fixed: Use correct parameter name
                       ),
                     );
                   },
@@ -163,35 +127,38 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
-          Consumer<AuthProvider>(
-            builder: (context, authProvider, child) {
-              final currentUser = authProvider.currentUser;
-              if (currentUser == null) return const SizedBox.shrink();
 
-              return MessageInput(
-                textController: _messageController,
-                onSendMessage: (content) => _sendMessage(
-                  currentUser.id.toString(),
-                  currentUser.displayName,
-                  content,
-                ),
-                onSendAttachment: () => _sendAttachment(currentUser.id.toString(), currentUser.displayName),
-              );
-            },
+          // Message Input
+          Container(
+            padding: const EdgeInsets.all(16),
+            child: Consumer<AuthProvider>(
+              builder: (context, authProvider, child) {
+                final currentUser = authProvider.currentUser;
+                if (currentUser == null) {
+                  return const Text('Please log in to send messages');
+                }
+
+                return MessageInput(
+                  textController: _messageController, // Fixed: Use correct parameter name
+                  onSendMessage: () => _sendMessage(currentUser),
+                  // Removed onSendAttachment - doesn't exist in MessageInput
+                );
+              },
+            ),
           ),
         ],
       ),
     );
   }
 
-  Future<void> _sendMessage(String senderId, String senderName, String content) async {
-    if (content.trim().isEmpty) return;
+  void _sendMessage(dynamic currentUser) async {
+    if (_messageController.text.trim().isEmpty) return;
 
     await context.read<ChatProvider>().sendMessage(
+      content: _messageController.text,
       groupId: widget.group.id!,
-      senderId: senderId,
-      senderName: senderName,
-      content: content.trim(),
+      senderId: currentUser.id.toString(),
+      senderName: currentUser.displayName,
     );
 
     _messageController.clear();
@@ -199,9 +166,9 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _sendAttachment(String senderId, String senderName) {
-    // TODO: Implement file attachment functionality
+    // TODO: Implement attachment functionality
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('File attachment coming soon!')),
+      const SnackBar(content: Text('Attachment functionality coming soon!')),
     );
   }
 }
