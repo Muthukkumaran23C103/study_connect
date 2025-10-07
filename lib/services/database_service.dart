@@ -5,6 +5,9 @@ import '../core/models/study_group_model.dart';
 import '../core/models/message_model.dart';
 import '../core/models/post_model.dart';
 import '../core/database/schema.dart';
+import '../core/models/study_group_model.dart';
+import '../core/models/message_model.dart';
+import '../core/models/post_model.dart';
 
 class DatabaseService {
   static Database? _database;
@@ -308,6 +311,246 @@ class DatabaseService {
       whereArgs: ['%$query%', '%$query%'],
     );
     return List.generate(maps.length, (i) => StudyGroup.fromMap(maps[i]));
+  }
+
+  Future<List<StudyGroup>> getStudyGroups() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('study_groups');
+
+    return List.generate(maps.length, (i) {
+      return StudyGroup(
+        id: maps[i]['id'],
+        name: maps[i]['name'],
+        description: maps[i]['description'],
+        category: maps[i]['category'],
+        memberCount: maps[i]['member_count'],
+        createdAt: DateTime.parse(maps[i]['created_at']),
+      );
+    });
+  }
+
+  Future<List<StudyGroup>> getUserGroups(String userId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+    SELECT sg.* FROM study_groups sg
+    INNER JOIN group_memberships gm ON sg.id = gm.group_id
+    WHERE gm.user_id = ?
+  ''', [userId]);
+
+    return List.generate(maps.length, (i) {
+      return StudyGroup(
+        id: maps[i]['id'],
+        name: maps[i]['name'],
+        description: maps[i]['description'],
+        category: maps[i]['category'],
+        memberCount: maps[i]['member_count'],
+        createdAt: DateTime.parse(maps[i]['created_at']),
+      );
+    });
+  }
+
+  Future<void> joinGroup(int groupId, String userId) async {
+    final db = await database;
+    await db.insert('group_memberships', {
+      'group_id': groupId,
+      'user_id': userId,
+      'joined_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<void> leaveGroup(int groupId, String userId) async {
+    final db = await database;
+    await db.delete(
+      'group_memberships',
+      where: 'group_id = ? AND user_id = ?',
+      whereArgs: [groupId, userId],
+    );
+  }
+
+  Future<int> insertStudyGroup(StudyGroup group) async {
+    final db = await database;
+    return await db.insert('study_groups', {
+      'name': group.name,
+      'description': group.description,
+      'category': group.category,
+      'member_count': group.memberCount,
+      'created_at': group.createdAt.toIso8601String(),
+    });
+  }
+
+  Future<List<StudyGroup>> searchStudyGroups(String query) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'study_groups',
+      where: 'name LIKE ? OR description LIKE ?',
+      whereArgs: ['%$query%', '%$query%'],
+    );
+
+    return List.generate(maps.length, (i) {
+      return StudyGroup(
+        id: maps[i]['id'],
+        name: maps[i]['name'],
+        description: maps[i]['description'],
+        category: maps[i]['category'],
+        memberCount: maps[i]['member_count'],
+        createdAt: DateTime.parse(maps[i]['created_at']),
+      );
+    });
+  }
+
+// Messages Methods
+  Future<List<Message>> getMessagesForGroup(int groupId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'messages',
+      where: 'group_id = ?',
+      whereArgs: [groupId],
+      orderBy: 'created_at ASC',
+    );
+
+    return List.generate(maps.length, (i) {
+      return Message(
+        id: maps[i]['id'],
+        content: maps[i]['content'],
+        senderId: maps[i]['sender_id'],
+        senderName: maps[i]['sender_name'],
+        groupId: maps[i]['group_id'],
+        messageType: maps[i]['message_type'],
+        createdAt: DateTime.parse(maps[i]['created_at']),
+      );
+    });
+  }
+
+  Future<int> insertMessage(Message message) async {
+    final db = await database;
+    return await db.insert('messages', {
+      'content': message.content,
+      'sender_id': message.senderId,
+      'sender_name': message.senderName,
+      'group_id': message.groupId,
+      'message_type': message.messageType,
+      'created_at': message.createdAt.toIso8601String(),
+    });
+  }
+
+  Future<Message?> getLastMessage(int groupId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'messages',
+      where: 'group_id = ?',
+      whereArgs: [groupId],
+      orderBy: 'created_at DESC',
+      limit: 1,
+    );
+
+    if (maps.isEmpty) return null;
+
+    return Message(
+      id: maps['id'],
+      content: maps['content'],
+      senderId: maps['sender_id'],
+      senderName: maps['sender_name'],
+      groupId: maps['group_id'],
+      messageType: maps['message_type'],
+      createdAt: DateTime.parse(maps['created_at']),
+    );
+  }
+
+// Posts Methods
+  Future<List<Post>> getAllPosts() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'posts',
+      orderBy: 'created_at DESC',
+    );
+
+    return List.generate(maps.length, (i) {
+      return Post(
+        id: maps[i]['id'],
+        content: maps[i]['content'],
+        authorId: maps[i]['author_id'],
+        authorName: maps[i]['author_name'],
+        groupId: maps[i]['group_id'],
+        likesCount: maps[i]['likes_count'],
+        commentsCount: maps[i]['comments_count'],
+        createdAt: DateTime.parse(maps[i]['created_at']),
+      );
+    });
+  }
+
+  Future<List<Post>> getGroupPosts(int groupId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'posts',
+      where: 'group_id = ?',
+      whereArgs: [groupId],
+      orderBy: 'created_at DESC',
+    );
+
+    return List.generate(maps.length, (i) {
+      return Post(
+        id: maps[i]['id'],
+        content: maps[i]['content'],
+        authorId: maps[i]['author_id'],
+        authorName: maps[i]['author_name'],
+        groupId: maps[i]['group_id'],
+        likesCount: maps[i]['likes_count'],
+        commentsCount: maps[i]['comments_count'],
+        createdAt: DateTime.parse(maps[i]['created_at']),
+      );
+    });
+  }
+
+  Future<int> insertPost(Post post) async {
+    final db = await database;
+    return await db.insert('posts', {
+      'content': post.content,
+      'author_id': post.authorId,
+      'author_name': post.authorName,
+      'group_id': post.groupId,
+      'likes_count': post.likesCount,
+      'comments_count': post.commentsCount,
+      'created_at': post.createdAt.toIso8601String(),
+    });
+  }
+
+  Future<void> togglePostLike(int postId, String userId) async {
+    final db = await database;
+
+    // Check if user already liked this post
+    final existingLike = await db.query(
+      'post_likes',
+      where: 'post_id = ? AND user_id = ?',
+      whereArgs: [postId, userId],
+    );
+
+    if (existingLike.isEmpty) {
+      // Add like
+      await db.insert('post_likes', {
+        'post_id': postId,
+        'user_id': userId,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      // Increment likes count
+      await db.rawUpdate(
+        'UPDATE posts SET likes_count = likes_count + 1 WHERE id = ?',
+        [postId],
+      );
+    } else {
+      // Remove like
+      await db.delete(
+        'post_likes',
+        where: 'post_id = ? AND user_id = ?',
+        whereArgs: [postId, userId],
+      );
+
+      // Decrement likes count
+      await db.rawUpdate(
+        'UPDATE posts SET likes_count = likes_count - 1 WHERE id = ?',
+        [postId],
+      );
+    }
   }
 
 }

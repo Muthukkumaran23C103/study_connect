@@ -1,71 +1,61 @@
 class Post {
   final int? id;
-  final int groupId;
+  final String content;
   final String authorId;
   final String authorName;
-  final String? authorAvatar;
-  final String title;
-  final String content;
-  final String postType;
+  final int? groupId;
+  final int likesCount;
+  final int commentsCount;
   final DateTime createdAt;
-  final int likeCount;
-  final int commentCount;
-  final bool isLiked;
   final String? attachmentUrl;
-  final String? attachmentType;
 
   Post({
     this.id,
-    required this.groupId,
+    required this.content,
     required this.authorId,
     required this.authorName,
-    this.authorAvatar,
-    required this.title,
-    required this.content,
-    this.postType = 'text',
+    this.groupId,
+    this.likesCount = 0,
+    this.commentsCount = 0,
     required this.createdAt,
-    this.likeCount = 0,
-    this.commentCount = 0,
-    this.isLiked = false,
     this.attachmentUrl,
-    this.attachmentType,
   });
-
-  factory Post.fromMap(Map<String, dynamic> map) {
-    return Post(
-      id: map['id'] as int?,
-      groupId: map['group_id'] as int,
-      authorId: map['author_id'] as String,
-      authorName: map['author_name'] as String,
-      authorAvatar: map['author_avatar'] as String?,
-      title: map['title'] as String,
-      content: map['content'] as String,
-      postType: map['post_type'] as String? ?? 'text',
-      createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int),
-      likeCount: map['like_count'] as int? ?? 0,
-      commentCount: map['comment_count'] as int? ?? 0,
-      isLiked: (map['is_liked'] as int? ?? 0) == 1,
-      attachmentUrl: map['attachment_url'] as String?,
-      attachmentType: map['attachment_type'] as String?,
-    );
-  }
 
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'group_id': groupId,
+      'content': content,
       'author_id': authorId,
       'author_name': authorName,
-      'author_avatar': authorAvatar,
-      'title': title,
-      'content': content,
-      'post_type': postType,
-      'created_at': createdAt.millisecondsSinceEpoch,
-      'like_count': likeCount,
-      'comment_count': commentCount,
-      'is_liked': isLiked ? 1 : 0,
+      'group_id': groupId,
+      'likes_count': likesCount,
+      'comments_count': commentsCount,
       'attachment_url': attachmentUrl,
-      'attachment_type': attachmentType,
+      'created_at': createdAt.toIso8601String(),
     };
+  }
+
+  Post copyWith({
+    int? id,
+    String? content,
+    String? authorId,
+    String? authorName,
+    int? groupId,
+    int? likesCount,
+    int? commentsCount,
+    DateTime? createdAt,
+    String? attachmentUrl,
+  }) {
+    return Post(
+      id: id ?? this.id,
+      content: content ?? this.content,
+      authorId: authorId ?? this.authorId,
+      authorName: authorName ?? this.authorName,
+      groupId: groupId ?? this.groupId,
+      likesCount: likesCount ?? this.likesCount,
+      commentsCount: commentsCount ?? this.commentsCount,
+      createdAt: createdAt ?? this.createdAt,
+      attachmentUrl: attachmentUrl ?? this.attachmentUrl,
+    );
   }
 }

@@ -1,20 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
-
 import '../../core/providers/chat_provider.dart';
-import '../../core/providers/study_group_provider.dart';
 import '../../core/providers/auth_provider.dart';
-import '../../core/models/message_model.dart';
+import '../../core/models/study_group_model.dart';
 import '../../widgets/chat/message_bubble.dart';
 import '../../widgets/chat/message_input.dart';
 
 class ChatScreen extends StatefulWidget {
-  final int groupId;
+  final StudyGroup group;
 
   const ChatScreen({
     super.key,
-    required this.groupId,
+    required this.group,
   });
 
   @override
@@ -29,15 +26,8 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ChatProvider>().loadMessages(widget.groupId);
+      context.read<ChatProvider>().loadMessages(widget.group.id!);
     });
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    _messageController.dispose();
-    super.dispose();
   }
 
   void _scrollToBottom() {
@@ -52,25 +42,24 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final group = context.read<StudyGroupProvider>().getGroupById(widget.groupId);
-
     return Scaffold(
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(group?.name ?? 'Group Chat'),
-            if (group != null)
-              Text(
-                '${group.memberCount} members',
-                style: const TextStyle(fontSize: 12),
-              ),
+            Text(widget.group.name),
+            Text(
+              '${widget.group.memberCount} members',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+            ),
           ],
         ),
+        backgroundColor: Theme.of(context).primaryColor,
+        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.info_outline),
-            onPressed: () => _showGroupInfo(context),
+            onPressed: _showGroupInfo,
           ),
         ],
       ),
@@ -79,8 +68,6 @@ class _ChatScreenState extends State<ChatScreen> {
           Expanded(
             child: Consumer<ChatProvider>(
               builder: (context, chatProvider, child) {
-                final messages = chatProvider.getMessagesForGroup(widget.groupId);
-
                 if (chatProvider.isLoading) {
                   return const Center(child: CircularProgressIndicator());
                 }
@@ -90,18 +77,20 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          'Error: ${chatProvider.error}',
-                          style: const TextStyle(color: Colors.red),
-                        ),
+                        Text('Error: ${chatProvider.error}'),
+                        const SizedBox(height: 16),
                         ElevatedButton(
-                          onPressed: () => chatProvider.loadMessages(widget.groupId),
+                          onPressed: () {
+                            chatProvider.loadMessages(widget.group.id!);
+                          },
                           child: const Text('Retry'),
                         ),
                       ],
                     ),
                   );
                 }
+
+                final messages = chatProvider.getMessagesForGroup(widget.group.id!);
 
                 if (messages.isEmpty) {
                   return const Center(
@@ -124,182 +113,113 @@ class _ChatScreenState extends State<ChatScreen> {
                   );
                 }
 
-                // Auto-scroll to bottom when new messages arrive
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _scrollToBottom();
-                });
+                WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
 
                 return ListView.builder(
                   controller: _scrollController,
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final message = messages[index];
-                    final currentUserId = context.read<AuthProvider>().currentUser?.id.toString() ?? '';
-                    final isOwnMessage = message.senderId == currentUserId;
+                    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                    final currentUser = authProvider.currentUser;
+                    final isOwnMessage = currentUser?.id == message.senderId;
 
-                    bool showDateSeparator = false;
-                    if (index == 0) {
-                      showDateSeparator = true;
-                    } else {
-                      final previousMessage = messages[index - 1];
-                      final currentDate = DateTime(
-                        message.timestamp.year,
-                        message.timestamp.month,
-                        message.timestamp.day,
-                      );
-                      final previousDate = DateTime(
-                        previousMessage.timestamp.year,
-                        previousMessage.timestamp.month,
-                        previousMessage.timestamp.day,
-                      );
-                      showDateSeparator = !currentDate.isAtSameMomentAs(previousDate);
-                    }
-
-                    return Column(
-                      children: [
-                        if (showDateSeparator)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.grey,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                _formatDate(message.timestamp),
-                                style: TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ),
-                        MessageBubble(
-                          message: message,
-                          isOwnMessage: isOwnMessage,
-                        ),
-                      ],
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      child: MessageBubble(
+                        message: message,
+                        alignment: isOwnMessage ? MainAxisAlignment.end : MainAxisAlignment.start,
+                      ),
                     );
                   },
                 );
               },
             ),
           ),
-          MessageInput(
-            onSendMessage: _sendMessage,
-            onSendAttachment: _sendAttachment,
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  offset: const Offset(0, -2),
+                  blurRadius: 4,
+                  color: Colors.black.withOpacity(0.1),
+                ),
+              ],
+            ),
+            child: MessageInput(
+              onSendMessage: _sendMessage,
+              onSendImage: _sendImage,
+            ),
           ),
         ],
       ),
     );
   }
 
-  String _formatDate(DateTime timestamp) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = today.subtract(const Duration(days: 1));
-    final messageDate = DateTime(timestamp.year, timestamp.month, timestamp.day);
-
-    if (messageDate.isAtSameMomentAs(today)) {
-      return 'Today';
-    } else if (messageDate.isAtSameMomentAs(yesterday)) {
-      return 'Yesterday';
-    } else if (now.difference(messageDate).inDays < 7) {
-      return DateFormat('EEEE').format(timestamp);
-    } else {
-      return DateFormat('MMM dd, yyyy').format(timestamp);
-    }
-  }
-
-  Future<void> _sendMessage(String content) async {
+  void _sendMessage(String content) {
     if (content.trim().isEmpty) return;
 
-    final authProvider = context.read<AuthProvider>();
-    final chatProvider = context.read<ChatProvider>();
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final currentUser = authProvider.currentUser;
 
-    if (currentUser == null) return;
-
-    try {
-      await chatProvider.sendMessage(
-        groupId: widget.groupId,
-        senderId: currentUser.id.toString(),
-        senderName: currentUser.displayName,
+    if (currentUser != null) {
+      context.read<ChatProvider>().sendMessage(
         content: content.trim(),
-        messageType: 'text',
+        senderId: currentUser.id,
+        senderName: currentUser.displayName,
+        groupId: widget.group.id!,
       );
-
-      // Auto-scroll to bottom after sending message
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToBottom();
-      });
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send message: $e')),
-        );
-      }
+      _messageController.clear();
+      _scrollToBottom();
     }
   }
 
-  Future<void> _sendAttachment() async {
-    // Implement attachment functionality
+  void _sendImage() {
+    // TODO: Implement image sending
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Attachment feature coming soon!')),
+      const SnackBar(content: Text('Image sending coming soon!')),
     );
   }
 
-  void _showGroupInfo(BuildContext context) {
-    final group = context.read<StudyGroupProvider>().getGroupById(widget.groupId);
-
-    if (group == null) return;
-
+  void _showGroupInfo() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(group.name),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(group.description),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                const Icon(Icons.people, size: 16),
-                const SizedBox(width: 8),
-                Text('${group.memberCount} members'),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.category, size: 16),
-                const SizedBox(width: 8),
-                Text(group.category),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.date_range, size: 16),
-                const SizedBox(width: 8),
-                Text('Created: ${DateFormat('MMM dd, yyyy').format(group.createdAt)}'),
-              ],
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(widget.group.name),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Category: ${widget.group.category}'),
+              const SizedBox(height: 8),
+              Text('Members: ${widget.group.memberCount}'),
+              const SizedBox(height: 8),
+              Text('Description: ${widget.group.description}'),
+              const SizedBox(height: 16),
+              Text(
+                'Created: ${widget.group.createdAt.day}/${widget.group.createdAt.month}/${widget.group.createdAt.year}',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
             ),
           ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
+        );
+      },
     );
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 }

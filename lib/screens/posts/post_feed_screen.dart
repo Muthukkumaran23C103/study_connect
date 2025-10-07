@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
-
 import '../../core/providers/post_provider.dart';
-import '../../core/providers/study_group_provider.dart';
-import '../../core/models/post_model.dart';
+import '../../core/providers/auth_provider.dart';
+import '../../widgets/common/custom_button.dart';
+import '../../widgets/common/custom_text_field.dart';
 
 class PostFeedScreen extends StatefulWidget {
   final int? groupId;
@@ -33,14 +32,23 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.groupId != null ? 'Group Posts' : 'All Posts'),
+        backgroundColor: Theme.of(context).primaryColor,
+        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () => _showCreatePostDialog(context),
+            onPressed: _showCreatePostDialog,
           ),
           IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () => _showSearchDialog(context),
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              final postProvider = Provider.of<PostProvider>(context, listen: false);
+              if (widget.groupId != null) {
+                postProvider.loadGroupPosts(widget.groupId!);
+              } else {
+                postProvider.loadAllPosts();
+              }
+            },
           ),
         ],
       ),
@@ -55,28 +63,24 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    'Error: ${postProvider.error}',
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                  ElevatedButton(
+                  Text('Error: ${postProvider.error}'),
+                  const SizedBox(height: 16),
+                  CustomButton(
+                    text: 'Retry',
                     onPressed: () {
                       if (widget.groupId != null) {
-                        postProvider.loadGroupPosts(widget.groupId!);
+                        return postProvider.loadGroupPosts(widget.groupId!);
                       } else {
-                        postProvider.loadAllPosts();
+                        return postProvider.loadAllPosts();
                       }
                     },
-                    child: const Text('Retry'),
                   ),
                 ],
               ),
             );
           }
 
-          final posts = postProvider.posts;
-
-          if (posts.isEmpty) {
+          if (postProvider.posts.isEmpty) {
             return const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -89,7 +93,7 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
                   ),
                   SizedBox(height: 8),
                   Text(
-                    'Create your first post to get started!',
+                    'Be the first to share something!',
                     style: TextStyle(color: Colors.grey),
                   ),
                 ],
@@ -106,10 +110,10 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
               }
             },
             child: ListView.builder(
-              itemCount: posts.length,
+              itemCount: postProvider.posts.length,
               itemBuilder: (context, index) {
-                final post = posts[index];
-                return _buildPostCard(context, post);
+                final post = postProvider.posts[index];
+                return _buildPostCard(post);
               },
             ),
           );
@@ -118,7 +122,10 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
     );
   }
 
-  Widget _buildPostCard(BuildContext context, Post post) {
+  Widget _buildPostCard(post) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final currentUser = authProvider.currentUser;
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Padding(
@@ -126,20 +133,13 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Author info
             Row(
               children: [
                 CircleAvatar(
-                  radius: 20,
-                  backgroundColor: Colors.blue,
+                  backgroundColor: Theme.of(context).primaryColor,
                   child: Text(
-                    post.authorName.isNotEmpty
-                        ? post.authorName.substring(0, 1).toUpperCase()
-                        : 'U',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    post.authorName.toUpperCase(),
+                    style: const TextStyle(color: Colors.white),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -149,13 +149,10 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
                     children: [
                       Text(
                         post.authorName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                        ),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       Text(
-                        _formatTime(post.createdAt),
+                        '${post.createdAt.day}/${post.createdAt.month}/${post.createdAt.year}',
                         style: TextStyle(
                           color: Colors.grey,
                           fontSize: 12,
@@ -165,23 +162,17 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
                   ),
                 ),
                 PopupMenuButton<String>(
-                  onSelected: (value) => _handlePostAction(context, post, value),
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'save',
-                      child: Row(
-                        children: [
-                          Icon(Icons.bookmark_outline),
-                          SizedBox(width: 8),
-                          Text('Save'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem(
+                  onSelected: (value) {
+                    if (value == 'report') {
+                      _reportPost(post.id!);
+                    }
+                  },
+                  itemBuilder: (BuildContext context) => [
+                    const PopupMenuItem<String>(
                       value: 'report',
                       child: Row(
                         children: [
-                          Icon(Icons.report_outline),
+                          Icon(Icons.flag_outlined),
                           SizedBox(width: 8),
                           Text('Report'),
                         ],
@@ -192,48 +183,56 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
               ],
             ),
             const SizedBox(height: 12),
-
-            // Post title
-            if (post.title.isNotEmpty)
-              Text(
-                post.title,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-
-            if (post.title.isNotEmpty) const SizedBox(height: 8),
-
-            // Post content
             Text(
               post.content,
-              style: const TextStyle(fontSize: 14),
+              style: const TextStyle(fontSize: 16),
             ),
-
-            const SizedBox(height: 16),
-
-            // Action buttons
+            if (post.attachmentUrl != null) ...[
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  post.attachmentUrl!,
+                  width: double.infinity,
+                  height: 200,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      height: 200,
+                      color: Colors.grey,
+                      child: const Center(
+                        child: Icon(Icons.error, color: Colors.grey),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
             Row(
               children: [
                 IconButton(
                   icon: Icon(
-                    post.isLiked ? Icons.favorite : Icons.favorite_border,
-                    color: post.isLiked ? Colors.red : Colors.grey,
+                    Icons.thumb_up_outlined,
+                    color: Theme.of(context).primaryColor,
                   ),
-                  onPressed: () => _toggleLike(context, post),
+                  onPressed: () {
+                    if (currentUser != null) {
+                      context.read<PostProvider>().toggleLike(post.id!, currentUser.id);
+                    }
+                  },
                 ),
-                Text('${post.likeCount}'),
-                const SizedBox(width: 16),
+                Text('${post.likesCount}'),
+                const SizedBox(width: 24),
                 IconButton(
-                  icon: Icon(Icons.comment_outlined, color: Colors.grey),
-                  onPressed: () => _showComments(context, post),
+                  icon: const Icon(Icons.comment_outlined),
+                  onPressed: () => _showComments(post.id!),
                 ),
-                Text('${post.commentCount}'),
-                const SizedBox(width: 16),
+                Text('${post.commentsCount}'),
+                const Spacer(),
                 IconButton(
-                  icon: Icon(Icons.share_outlined, color: Colors.grey),
-                  onPressed: () => _sharePost(context, post),
+                  icon: const Icon(Icons.share_outlined),
+                  onPressed: () => _sharePost(post.id!),
                 ),
               ],
             ),
@@ -243,175 +242,101 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
     );
   }
 
-  String _formatTime(DateTime timestamp) {
-    final now = DateTime.now();
-    final difference = now.difference(timestamp);
+  void _showCreatePostDialog() {
+    final contentController = TextEditingController();
 
-    if (difference.inDays > 0) {
-      return DateFormat('MMM dd, yyyy').format(timestamp);
-    } else if (difference.inHours > 0) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes}m ago';
-    } else {
-      return 'Just now';
-    }
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Create Post'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CustomTextField(
+                  controller: contentController,
+                  label: 'What\'s on your mind?',
+                  hintText: 'Share your thoughts, questions, or resources...',
+                  maxLines: 5,
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.image),
+                      onPressed: () {
+                        // TODO: Add image picker
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Image upload coming soon!')),
+                        );
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.attach_file),
+                      onPressed: () {
+                        // TODO: Add file picker
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('File upload coming soon!')),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            CustomButton(
+              text: 'Post',
+              onPressed: () async {
+                if (contentController.text.isNotEmpty) {
+                  final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                  final currentUser = authProvider.currentUser;
+
+                  if (currentUser != null) {
+                    await context.read<PostProvider>().createPost(
+                      content: contentController.text,
+                      authorId: currentUser.id,
+                      authorName: currentUser.displayName,
+                      groupId: widget.groupId,
+                    );
+
+                    if (mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Post created successfully!')),
+                      );
+                    }
+                  }
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
-  void _toggleLike(BuildContext context, Post post) {
-    // Implement like functionality
-    context.read<PostProvider>().toggleLike(post.id!);
+  void _reportPost(int postId) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Post reported. Thank you for your feedback.')),
+    );
   }
 
-  void _showComments(BuildContext context, Post post) {
-    // Implement comments view
+  void _showComments(int postId) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Comments feature coming soon!')),
     );
   }
 
-  void _sharePost(BuildContext context, Post post) {
-    // Implement sharing functionality
+  void _sharePost(int postId) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Share feature coming soon!')),
-    );
-  }
-
-  void _handlePostAction(BuildContext context, Post post, String action) {
-    switch (action) {
-      case 'save':
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Post saved!')),
-        );
-        break;
-      case 'report':
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Post reported!')),
-        );
-        break;
-    }
-  }
-
-  void _showCreatePostDialog(BuildContext context) {
-    final titleController = TextEditingController();
-    final contentController = TextEditingController();
-    int? selectedGroupId = widget.groupId;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Create Post'),
-        content: SizedBox(
-          width: MediaQuery.of(context).size.width * 0.8,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (widget.groupId == null)
-                Consumer<StudyGroupProvider>(
-                  builder: (context, groupProvider, child) {
-                    return DropdownButtonFormField<int>(
-                      value: selectedGroupId,
-                      decoration: const InputDecoration(labelText: 'Group'),
-                      hint: const Text('Select a group'),
-                      items: groupProvider.userGroups.map((group) {
-                        return DropdownMenuItem(
-                          value: group.id,
-                          child: Text(group.name),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        selectedGroupId = value;
-                      },
-                    );
-                  },
-                ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: titleController,
-                decoration: const InputDecoration(labelText: 'Title (Optional)'),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: contentController,
-                decoration: const InputDecoration(labelText: 'Content'),
-                maxLines: 5,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (contentController.text.isNotEmpty && selectedGroupId != null) {
-                try {
-                  await context.read<PostProvider>().createPost(
-                    groupId: selectedGroupId!,
-                    title: titleController.text,
-                    content: contentController.text,
-                  );
-                  if (context.mounted) {
-                    Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Post created successfully!')),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to create post: $e')),
-                    );
-                  }
-                }
-              }
-            },
-            child: const Text('Post'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showSearchDialog(BuildContext context) {
-    final searchController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Search Posts'),
-        content: TextField(
-          controller: searchController,
-          decoration: const InputDecoration(
-            labelText: 'Search by title or content',
-            prefixIcon: Icon(Icons.search),
-          ),
-          onSubmitted: (query) {
-            if (query.isNotEmpty) {
-              context.read<PostProvider>().searchPosts(query);
-              Navigator.of(context).pop();
-            }
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final query = searchController.text;
-              if (query.isNotEmpty) {
-                context.read<PostProvider>().searchPosts(query);
-                Navigator.of(context).pop();
-              }
-            },
-            child: const Text('Search'),
-          ),
-        ],
-      ),
+      const SnackBar(content: Text('Post sharing coming soon!')),
     );
   }
 }

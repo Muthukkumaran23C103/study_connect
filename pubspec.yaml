@@ -1,45 +1,34 @@
 name: study_connect
-description: StudyConnect - A comprehensive study group management platform
-publish_to: 'none'
+description: StudyConnect - Phase 2 Social Learning Platform
 version: 1.0.0+1
 
 environment:
   sdk: '>=3.1.0 <4.0.0'
+  flutter: ">=3.13.0"
 
 dependencies:
   flutter:
     sdk: flutter
 
-  # Core SQLite Database
+  # Core Dependencies
+  provider: ^6.1.1
   sqflite: ^2.3.0
   path: ^1.8.3
+  shared_preferences: ^2.2.2
 
-  # State Management
-  provider: ^6.1.1
-
-  # UI Components
+  # UI Dependencies
   google_fonts: ^6.1.0
-
-  # Navigation (removing go_router - using Navigator)
-  # go_router: ^12.1.3  # REMOVED - causing issues
-
-  # Image & Media (mobile-friendly versions)
-  image_picker: ^1.0.4
+  flutter_svg: ^2.0.9
   cached_network_image: ^3.3.0
 
-  # Utilities
-  shared_preferences: ^2.2.2
-  intl: ^0.19.0
-  uuid: ^4.1.0
-
-  # Permissions
+  # Image & File Handling
+  image_picker: ^1.0.4
   permission_handler: ^11.1.0
 
-  # Local Notifications
-  flutter_local_notifications: ^16.1.0
-
-  # UI Enhancements
-  flutter_staggered_grid_view: ^0.7.0
+  # Utilities
+  intl: ^0.18.1
+  uuid: ^4.1.0
+  crypto: ^3.0.3
 
 dev_dependencies:
   flutter_test:
@@ -52,4 +41,3 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
-    - assets/lottie/

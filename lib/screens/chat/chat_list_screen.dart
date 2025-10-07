@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
-
 import '../../core/providers/study_group_provider.dart';
 import '../../core/providers/chat_provider.dart';
-import '../../core/models/study_group_model.dart';
+import '../../core/providers/auth_provider.dart';
+import '../../widgets/common/custom_button.dart';
+import 'chat_screen.dart';
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
@@ -18,7 +18,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<StudyGroupProvider>().loadUserGroups();
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final currentUser = authProvider.currentUser;
+      if (currentUser != null) {
+        context.read<StudyGroupProvider>().loadUserGroups(currentUser.id);
+      }
     });
   }
 
@@ -26,11 +30,20 @@ class _ChatListScreenState extends State<ChatListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Chats'),
+        title: const Text('My Chats'),
+        backgroundColor: Theme.of(context).primaryColor,
+        foregroundColor: Colors.white,
         actions: [
           IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () => _showSearchDialog(context),
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              final authProvider = Provider.of<AuthProvider>(context, listen: false);
+              final groupProvider = Provider.of<StudyGroupProvider>(context, listen: false);
+              final currentUser = authProvider.currentUser;
+              if (currentUser != null) {
+                groupProvider.loadUserGroups(currentUser.id);
+              }
+            },
           ),
         ],
       ),
@@ -45,22 +58,24 @@ class _ChatListScreenState extends State<ChatListScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    'Error: ${groupProvider.error}',
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                  ElevatedButton(
-                    onPressed: () => groupProvider.loadUserGroups(),
-                    child: const Text('Retry'),
+                  Text('Error: ${groupProvider.error}'),
+                  const SizedBox(height: 16),
+                  CustomButton(
+                    text: 'Retry',
+                    onPressed: () {
+                      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                      final currentUser = authProvider.currentUser;
+                      if (currentUser != null) {
+                        groupProvider.loadUserGroups(currentUser.id);
+                      }
+                    },
                   ),
                 ],
               ),
             );
           }
 
-          final userGroups = groupProvider.userGroups;
-
-          if (userGroups.isEmpty) {
+          if (groupProvider.userGroups.isEmpty) {
             return const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -68,12 +83,12 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey),
                   SizedBox(height: 16),
                   Text(
-                    'No chats yet',
+                    'No chat groups yet',
                     style: TextStyle(fontSize: 18, color: Colors.grey),
                   ),
                   SizedBox(height: 8),
                   Text(
-                    'Join a study group to start chatting!',
+                    'Join some study groups to start chatting!',
                     style: TextStyle(color: Colors.grey),
                   ),
                 ],
@@ -82,12 +97,19 @@ class _ChatListScreenState extends State<ChatListScreen> {
           }
 
           return RefreshIndicator(
-            onRefresh: () => groupProvider.loadUserGroups(),
+            onRefresh: () {
+              final authProvider = Provider.of<AuthProvider>(context, listen: false);
+              final currentUser = authProvider.currentUser;
+              if (currentUser != null) {
+                return groupProvider.loadUserGroups(currentUser.id);
+              }
+              return Future.value();
+            },
             child: ListView.builder(
-              itemCount: userGroups.length,
+              itemCount: groupProvider.userGroups.length,
               itemBuilder: (context, index) {
-                final group = userGroups[index];
-                return _buildChatTile(context, group);
+                final group = groupProvider.userGroups[index];
+                return _buildChatCard(group);
               },
             ),
           );
@@ -96,147 +118,74 @@ class _ChatListScreenState extends State<ChatListScreen> {
     );
   }
 
-  Widget _buildChatTile(BuildContext context, StudyGroup group) {
+  Widget _buildChatCard(group) {
     return Consumer<ChatProvider>(
       builder: (context, chatProvider, child) {
         final lastMessage = chatProvider.getLastMessage(group.id!);
 
-        return ListTile(
-          leading: CircleAvatar(
-            backgroundColor: _getCategoryColor(group.category),
-            child: Icon(
-              _getCategoryIcon(group.category),
-              color: Colors.white,
+        return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: Theme.of(context).primaryColor,
+              child: Text(
+                group.category.toUpperCase(),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
             ),
-          ),
-          title: Text(
-            group.name,
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-          subtitle: lastMessage != null
-              ? Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${lastMessage.senderName}: ${lastMessage.content}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 13,
+            title: Text(
+              group.name,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: FutureBuilder(
+              future: lastMessage,
+              builder: (context, snapshot) {
+                if (snapshot.hasData && snapshot.data != null) {
+                  final message = snapshot.data!;
+                  return Text(
+                    '${message.senderName}: ${message.content}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.grey),
+                  );
+                }
+                return Text(
+                  'No messages yet',
+                  style: TextStyle(color: Colors.grey),
+                );
+              },
+            ),
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.chevron_right, color: Colors.grey),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '${group.memberCount}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).primaryColor,
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                _formatTime(lastMessage.timestamp),
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 11,
+              ],
+            ),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ChatScreen(group: group),
                 ),
-              ),
-            ],
-          )
-              : Text(
-            'No messages yet',
-            style: TextStyle(color: Colors.grey),
+              );
+            },
           ),
-          trailing: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.people, size: 16, color: Colors.grey),
-              const SizedBox(height: 2),
-              Text(
-                '${group.memberCount}',
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-          onTap: () {
-            Navigator.pushNamed(context, '/chat/${group.id}');
-          },
         );
       },
-    );
-  }
-
-  Color _getCategoryColor(String category) {
-    switch (category.toUpperCase()) {
-      case 'AI':
-        return Colors.purple;
-      case 'MOBILE DEV':
-      case 'MOBILE':
-        return Colors.blue;
-      case 'OS':
-        return Colors.green;
-      default:
-        return Colors.orange;
-    }
-  }
-
-  IconData _getCategoryIcon(String category) {
-    switch (category.toUpperCase()) {
-      case 'AI':
-        return Icons.psychology;
-      case 'MOBILE DEV':
-      case 'MOBILE':
-        return Icons.phone_android;
-      case 'OS':
-        return Icons.computer;
-      default:
-        return Icons.book;
-    }
-  }
-
-  String _formatTime(DateTime timestamp) {
-    final now = DateTime.now();
-    final difference = now.difference(timestamp);
-
-    if (difference.inDays > 0) {
-      return DateFormat('MMM dd').format(timestamp);
-    } else if (difference.inHours > 0) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes}m ago';
-    } else {
-      return 'Just now';
-    }
-  }
-
-  void _showSearchDialog(BuildContext context) {
-    final searchController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Search Chats'),
-        content: TextField(
-          controller: searchController,
-          decoration: const InputDecoration(
-            labelText: 'Search by group name',
-            prefixIcon: Icon(Icons.search),
-          ),
-          onSubmitted: (query) {
-            // Implement search functionality if needed
-            Navigator.of(context).pop();
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              // Implement search functionality
-              Navigator.of(context).pop();
-            },
-            child: const Text('Search'),
-          ),
-        ],
-      ),
     );
   }
 }

@@ -1,103 +1,135 @@
 import 'package:flutter/material.dart';
+import '../../core/models/message_model.dart';
 
 class MessageBubble extends StatelessWidget {
-  final String message;
-  final bool isMe;
-  final String senderName;
-  final DateTime timestamp;
-  final String? senderAvatar;
+  final Message message;
+  final MainAxisAlignment alignment;
 
   const MessageBubble({
-    Key? key,
+    super.key,
     required this.message,
-    required this.isMe,
-    required this.senderName,
-    required this.timestamp,
-    this.senderAvatar,
-  }) : super(key: key);
+    required this.alignment,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-      child: Row(
-        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          if (!isMe) ...[
-            CircleAvatar(
-              radius: 16,
-              backgroundImage: senderAvatar != null
-                  ? AssetImage(senderAvatar!)
-                  : null,
-              child: senderAvatar == null
-                  ? Text(senderName.isNotEmpty ? senderName : 'U')
-                  : null,
-            ),
-            const SizedBox(width: 8),
-          ],
-          Flexible(
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isMe
-                    ? Theme.of(context).primaryColor
-                    : Theme.of(context).cardColor,
-                borderRadius: BorderRadius.circular(16).copyWith(
-                  bottomLeft: isMe ? const Radius.circular(16) : Radius.zero,
-                  bottomRight: isMe ? Radius.zero : const Radius.circular(16),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (!isMe)
-                    Text(
-                      senderName,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).hintColor,
-                      ),
-                    ),
-                  Text(
-                    message,
-                    style: TextStyle(
-                      color: isMe ? Colors.white : null,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _formatTime(timestamp),
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: isMe
-                          ? Colors.white70
-                          : Theme.of(context).hintColor,
-                    ),
-                  ),
-                ],
-              ),
+    final isOwn = alignment == MainAxisAlignment.end;
+
+    return Row(
+      mainAxisAlignment: alignment,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (!isOwn) ...[
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: Theme.of(context).primaryColor,
+            child: Text(
+              message.senderName.toUpperCase(),
+              style: const TextStyle(color: Colors.white, fontSize: 12),
             ),
           ),
-          if (isMe) ...[
-            const SizedBox(width: 8),
-            CircleAvatar(
-              radius: 16,
-              backgroundImage: senderAvatar != null
-                  ? AssetImage(senderAvatar!)
-                  : null,
-              child: senderAvatar == null
-                  ? Text(senderName.isNotEmpty ? senderName : 'Me')
-                  : null,
-            ),
-          ],
+          const SizedBox(width: 8),
         ],
-      ),
+        Flexible(
+          child: Column(
+            crossAxisAlignment: isOwn ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            children: [
+              if (!isOwn)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    message.senderName,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isOwn
+                      ? Theme.of(context).primaryColor
+                      : Colors.grey,
+                  borderRadius: BorderRadius.circular(18).copyWith(
+                    bottomRight: Radius.circular(isOwn ? 4 : 18),
+                    bottomLeft: Radius.circular(isOwn ? 18 : 4),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      message.content,
+                      style: TextStyle(
+                        color: isOwn ? Colors.white : Colors.black87,
+                        fontSize: 15,
+                      ),
+                    ),
+                    if (message.attachmentUrl != null) ...[
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          message.attachmentUrl!,
+                          width: 200,
+                          height: 150,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              width: 200,
+                              height: 150,
+                              color: Colors.grey,
+                              child: const Center(
+                                child: Icon(Icons.error, color: Colors.grey),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                _formatTime(message.createdAt),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (isOwn) ...[
+          const SizedBox(width: 8),
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: Theme.of(context).primaryColor,
+            child: Text(
+              message.senderName.toUpperCase(),
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
-  String _formatTime(DateTime time) {
-    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  String _formatTime(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inDays > 0) {
+      return '${dateTime.day}/${dateTime.month}';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return 'Just now';
+    }
   }
 }
