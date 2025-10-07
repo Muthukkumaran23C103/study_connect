@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../../core/providers/study_group_provider.dart';
 import '../../core/providers/chat_provider.dart';
 import '../../core/providers/auth_provider.dart';
-import '../../widgets/common/custom_button.dart';
 import 'chat_screen.dart';
 
 class ChatListScreen extends StatefulWidget {
@@ -17,74 +16,87 @@ class _ChatListScreenState extends State<ChatListScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final currentUser = authProvider.currentUser;
-      if (currentUser != null) {
-        context.read<StudyGroupProvider>().loadUserGroups(currentUser.id);
-      }
-    });
+    final currentUser = context.read<AuthProvider>().currentUser;
+    if (currentUser != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.read<StudyGroupProvider>().loadUserGroups(currentUser.id.toString());
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final currentUser = context.read<AuthProvider>().currentUser;
+
+    if (currentUser == null) {
+      return const Scaffold(
+        body: Center(
+          child: Text('Please login to view chats'),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Chats'),
-        backgroundColor: Theme.of(context).primaryColor,
-        foregroundColor: Colors.white,
+        title: const Text('Chats'),
+        elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              final authProvider = Provider.of<AuthProvider>(context, listen: false);
-              final groupProvider = Provider.of<StudyGroupProvider>(context, listen: false);
-              final currentUser = authProvider.currentUser;
-              if (currentUser != null) {
-                groupProvider.loadUserGroups(currentUser.id);
-              }
+          Consumer<StudyGroupProvider>(
+            builder: (context, groupProvider, child) {
+              return IconButton(
+                onPressed: () {
+                  groupProvider.loadUserGroups(currentUser.id.toString());
+                },
+                icon: groupProvider.isLoading
+                    ? const CircularProgressIndicator()
+                    : const Icon(Icons.refresh),
+              );
             },
           ),
         ],
       ),
       body: Consumer<StudyGroupProvider>(
         builder: (context, groupProvider, child) {
-          if (groupProvider.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (groupProvider.error != null) {
+          // Error handling
+          if (groupProvider.errorMessage != null) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text('Error: ${groupProvider.error}'),
+                  Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
                   const SizedBox(height: 16),
-                  CustomButton(
-                    text: 'Retry',
+                  Text('Error: ${groupProvider.errorMessage}'),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
                     onPressed: () {
-                      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                      final currentUser = authProvider.currentUser;
-                      if (currentUser != null) {
-                        groupProvider.loadUserGroups(currentUser.id);
-                      }
+                      groupProvider.loadUserGroups(currentUser.id.toString());
                     },
+                    child: const Text('Retry'),
                   ),
                 ],
               ),
             );
           }
 
+          // Loading state
+          if (groupProvider.isLoading && groupProvider.userGroups.isEmpty) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          // Empty state
           if (groupProvider.userGroups.isEmpty) {
             return const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey),
+                  Icon(Icons.chat_outlined, size: 64, color: Colors.grey),
                   SizedBox(height: 16),
                   Text(
-                    'No chat groups yet',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
+                    'No chats yet',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.grey,
+                    ),
                   ),
                   SizedBox(height: 8),
                   Text(
@@ -96,20 +108,16 @@ class _ChatListScreenState extends State<ChatListScreen> {
             );
           }
 
+          // Groups list
           return RefreshIndicator(
-            onRefresh: () {
-              final authProvider = Provider.of<AuthProvider>(context, listen: false);
-              final currentUser = authProvider.currentUser;
-              if (currentUser != null) {
-                return groupProvider.loadUserGroups(currentUser.id);
-              }
-              return Future.value();
+            onRefresh: () async {
+              await groupProvider.loadUserGroups(currentUser.id.toString());
             },
             child: ListView.builder(
               itemCount: groupProvider.userGroups.length,
               itemBuilder: (context, index) {
                 final group = groupProvider.userGroups[index];
-                return _buildChatCard(group);
+                return _buildChatItem(group);
               },
             ),
           );
@@ -118,74 +126,88 @@ class _ChatListScreenState extends State<ChatListScreen> {
     );
   }
 
-  Widget _buildChatCard(group) {
+  Widget _buildChatItem(group) {
     return Consumer<ChatProvider>(
       builder: (context, chatProvider, child) {
-        final lastMessage = chatProvider.getLastMessage(group.id!);
+        // Get last message for this group
+        return FutureBuilder(
+          future: chatProvider.getLastMessage(group.id!),
+          builder: (context, snapshot) {
+            final message = snapshot.data;
 
-        return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Theme.of(context).primaryColor,
-              child: Text(
-                group.category.toUpperCase(),
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            return ListTile(
+              leading: CircleAvatar(
+                backgroundColor: _getCategoryColor(group.category),
+                child: Text(
+                  group.name.substring(0, 1).toUpperCase(),
+                  style: const TextStyle(color: Colors.white),
+                ),
               ),
-            ),
-            title: Text(
-              group.name,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: FutureBuilder(
-              future: lastMessage,
-              builder: (context, snapshot) {
-                if (snapshot.hasData && snapshot.data != null) {
-                  final message = snapshot.data!;
-                  return Text(
-                    '${message.senderName}: ${message.content}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Colors.grey),
-                  );
-                }
-                return Text(
-                  'No messages yet',
-                  style: TextStyle(color: Colors.grey),
+              title: Text(
+                group.name,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: message != null
+                  ? Text(
+                '${message.senderName}: ${message.content}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              )
+                  : Text(
+                '${group.memberCount} members',
+                style: TextStyle(color: Colors.grey.shade600),
+              ),
+              trailing: message != null
+                  ? Text(
+                _formatTime(message.timestamp),
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontSize: 12,
+                ),
+              )
+                  : null,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ChatScreen(group: group),
+                  ),
                 );
               },
-            ),
-            trailing: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.chevron_right, color: Colors.grey),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).primaryColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '${group.memberCount}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(context).primaryColor,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ChatScreen(group: group),
-                ),
-              );
-            },
-          ),
+            );
+          },
         );
       },
     );
+  }
+
+  Color _getCategoryColor(String category) {
+    switch (category.toLowerCase()) {
+      case 'ai':
+        return Colors.purple;
+      case 'mobile development':
+        return Colors.blue;
+      case 'operating systems':
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _formatTime(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inMinutes < 1) {
+      return 'Now';
+    } else if (difference.inHours < 1) {
+      return '${difference.inMinutes}m';
+    } else if (difference.inDays < 1) {
+      return '${difference.inHours}h';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d';
+    } else {
+      return '${dateTime.day}/${dateTime.month}';
+    }
   }
 }

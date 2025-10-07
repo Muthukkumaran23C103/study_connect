@@ -13,16 +13,14 @@ class PostProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   Future<void> loadAllPosts() async {
-    try {
-      _isLoading = true;
-      _errorMessage = null;
-      notifyListeners();
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
 
+    try {
       _posts = await _databaseService.getAllPosts();
-      notifyListeners();
     } catch (e) {
       _errorMessage = e.toString();
-      notifyListeners();
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -30,16 +28,14 @@ class PostProvider extends ChangeNotifier {
   }
 
   Future<void> loadGroupPosts(int groupId) async {
-    try {
-      _isLoading = true;
-      _errorMessage = null;
-      notifyListeners();
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
 
+    try {
       _posts = await _databaseService.getGroupPosts(groupId);
-      notifyListeners();
     } catch (e) {
       _errorMessage = e.toString();
-      notifyListeners();
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -47,80 +43,53 @@ class PostProvider extends ChangeNotifier {
   }
 
   Future<void> createPost({
-    required String title,
-    required String content,
     required String authorId,
     required String authorName,
+    required String title,
+    required String content,
     int? groupId,
+    List<String>? attachments,
   }) async {
     try {
-      _isLoading = true;
-      _errorMessage = null;
-      notifyListeners();
-
       final post = Post(
-        title: title,
-        content: content,
+        id: DateTime.now().millisecondsSinceEpoch,
         authorId: authorId,
         authorName: authorName,
+        title: title,
+        content: content,
+        timestamp: DateTime.now(),
         groupId: groupId,
-        createdAt: DateTime.now(),
+        attachments: attachments ?? [],
+        likesCount: 0,
+        commentsCount: 0,
       );
 
       final postId = await _databaseService.insertPost(post);
-
-      // Add the new post to the local list
       final newPost = post.copyWith(id: postId);
       _posts.insert(0, newPost);
       notifyListeners();
     } catch (e) {
       _errorMessage = e.toString();
       notifyListeners();
-    } finally {
-      _isLoading = false;
-      notifyListeners();
     }
   }
 
   Future<void> toggleLike(int postId, String userId) async {
     try {
+      final isLiked = await _databaseService.isPostLiked(postId, userId);
       await _databaseService.toggleLike(postId, userId);
 
-      // Update the post in the local list
       final postIndex = _posts.indexWhere((post) => post.id == postId);
       if (postIndex != -1) {
         final post = _posts[postIndex];
-        final isLiked = await _databaseService.isPostLiked(postId, userId);
-        final updatedPost = post.copyWith(
-          likesCount: isLiked ? post.likesCount + 1 : post.likesCount - 1,
+        _posts[postIndex] = post.copyWith(
+          likesCount: isLiked ? post.likesCount - 1 : post.likesCount + 1,
         );
-        _posts[postIndex] = updatedPost;
         notifyListeners();
       }
     } catch (e) {
       _errorMessage = e.toString();
       notifyListeners();
     }
-  }
-
-  Future<bool> isPostLiked(int postId, String userId) async {
-    try {
-      return await _databaseService.isPostLiked(postId, userId);
-    } catch (e) {
-      _errorMessage = e.toString();
-      notifyListeners();
-      return false;
-    }
-  }
-
-  void clearPosts() {
-    _posts.clear();
-    _errorMessage = null;
-    notifyListeners();
-  }
-
-  void clearError() {
-    _errorMessage = null;
-    notifyListeners();
   }
 }

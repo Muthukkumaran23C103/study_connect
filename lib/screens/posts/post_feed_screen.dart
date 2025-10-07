@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/post_provider.dart';
 import '../../core/providers/auth_provider.dart';
-import '../../widgets/common/custom_button.dart';
 import '../../widgets/common/custom_text_field.dart';
+import '../../widgets/common/custom_button.dart';
 
 class PostFeedScreen extends StatefulWidget {
   final int? groupId;
@@ -15,6 +15,9 @@ class PostFeedScreen extends StatefulWidget {
 }
 
 class _PostFeedScreenState extends State<PostFeedScreen> {
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _contentController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -32,99 +35,116 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.groupId != null ? 'Group Posts' : 'All Posts'),
-        backgroundColor: Theme.of(context).primaryColor,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: _showCreatePostDialog,
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              final postProvider = Provider.of<PostProvider>(context, listen: false);
-              if (widget.groupId != null) {
-                postProvider.loadGroupPosts(widget.groupId!);
-              } else {
-                postProvider.loadAllPosts();
+        elevation: 0,
+      ),
+      body: Column(
+        children: [
+          // Error handling
+          Consumer<PostProvider>(
+            builder: (context, postProvider, child) {
+              if (postProvider.errorMessage != null) {
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Text(
+                    'Error: ${postProvider.errorMessage}',
+                    style: TextStyle(color: Colors.red.shade700),
+                  ),
+                );
               }
+              return const SizedBox.shrink();
             },
+          ),
+
+          // Refresh button
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Consumer<PostProvider>(
+              builder: (context, postProvider, child) {
+                return ElevatedButton(
+                  onPressed: postProvider.isLoading ? null : () {
+                    if (widget.groupId != null) {
+                      postProvider.loadGroupPosts(widget.groupId!);
+                    } else {
+                      postProvider.loadAllPosts();
+                    }
+                  },
+                  child: postProvider.isLoading
+                      ? const CircularProgressIndicator()
+                      : const Text('Refresh Posts'),
+                );
+              },
+            ),
+          ),
+
+          // Posts list
+          Expanded(
+            child: Consumer<PostProvider>(
+              builder: (context, postProvider, child) {
+                if (postProvider.isLoading && postProvider.posts.isEmpty) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (postProvider.posts.isEmpty) {
+                  return const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.post_add, size: 64, color: Colors.grey),
+                        SizedBox(height: 16),
+                        Text(
+                          'No posts yet',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.grey,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Be the first to share something!',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return RefreshIndicator(
+                  onRefresh: () async {
+                    if (widget.groupId != null) {
+                      await postProvider.loadGroupPosts(widget.groupId!);
+                    } else {
+                      await postProvider.loadAllPosts();
+                    }
+                  },
+                  child: ListView.builder(
+                    itemCount: postProvider.posts.length,
+                    itemBuilder: (context, index) {
+                      final post = postProvider.posts[index];
+                      return _buildPostCard(post);
+                    },
+                  ),
+                );
+              },
+            ),
           ),
         ],
       ),
-      body: Consumer<PostProvider>(
-        builder: (context, postProvider, child) {
-          if (postProvider.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (postProvider.error != null) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('Error: ${postProvider.error}'),
-                  const SizedBox(height: 16),
-                  CustomButton(
-                    text: 'Retry',
-                    onPressed: () {
-                      if (widget.groupId != null) {
-                        return postProvider.loadGroupPosts(widget.groupId!);
-                      } else {
-                        return postProvider.loadAllPosts();
-                      }
-                    },
-                  ),
-                ],
-              ),
-            );
-          }
-
-          if (postProvider.posts.isEmpty) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.article_outlined, size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text(
-                    'No posts yet',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Be the first to share something!',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return RefreshIndicator(
-            onRefresh: () {
-              if (widget.groupId != null) {
-                return postProvider.loadGroupPosts(widget.groupId!);
-              } else {
-                return postProvider.loadAllPosts();
-              }
-            },
-            child: ListView.builder(
-              itemCount: postProvider.posts.length,
-              itemBuilder: (context, index) {
-                final post = postProvider.posts[index];
-                return _buildPostCard(post);
-              },
-            ),
-          );
-        },
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showCreatePostDialog(),
+        child: const Icon(Icons.add),
       ),
     );
   }
 
   Widget _buildPostCard(post) {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final currentUser = authProvider.currentUser;
+    final currentUser = context.read<AuthProvider>().currentUser;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -133,14 +153,11 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header
             Row(
               children: [
                 CircleAvatar(
-                  backgroundColor: Theme.of(context).primaryColor,
-                  child: Text(
-                    post.authorName.toUpperCase(),
-                    style: const TextStyle(color: Colors.white),
-                  ),
+                  child: Text(post.authorName.substring(0, 1).toUpperCase()),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -152,9 +169,9 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       Text(
-                        '${post.createdAt.day}/${post.createdAt.month}/${post.createdAt.year}',
+                        _formatDate(post.timestamp),
                         style: TextStyle(
-                          color: Colors.grey,
+                          color: Colors.grey.shade600,
                           fontSize: 12,
                         ),
                       ),
@@ -164,15 +181,15 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
                 PopupMenuButton<String>(
                   onSelected: (value) {
                     if (value == 'report') {
-                      _reportPost(post.id!);
+                      _showReportDialog();
                     }
                   },
-                  itemBuilder: (BuildContext context) => [
-                    const PopupMenuItem<String>(
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
                       value: 'report',
                       child: Row(
                         children: [
-                          Icon(Icons.flag_outlined),
+                          Icon(Icons.report_outlined),
                           SizedBox(width: 8),
                           Text('Report'),
                         ],
@@ -182,57 +199,42 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
+
+            // Title
             Text(
-              post.content,
-              style: const TextStyle(fontSize: 16),
-            ),
-            if (post.attachmentUrl != null) ...[
-              const SizedBox(height: 12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  post.attachmentUrl!,
-                  width: double.infinity,
-                  height: 200,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      height: 200,
-                      color: Colors.grey,
-                      child: const Center(
-                        child: Icon(Icons.error, color: Colors.grey),
-                      ),
-                    );
-                  },
-                ),
+              post.title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
               ),
-            ],
-            const SizedBox(height: 12),
+            ),
+            const SizedBox(height: 8),
+
+            // Content
+            Text(post.content),
+            const SizedBox(height: 16),
+
+            // Actions
             Row(
               children: [
-                IconButton(
-                  icon: Icon(
-                    Icons.thumb_up_outlined,
-                    color: Theme.of(context).primaryColor,
-                  ),
+                TextButton.icon(
+                  onPressed: currentUser != null ? () {
+                    context.read<PostProvider>().toggleLike(
+                      post.id!,
+                      currentUser.id.toString(),
+                    );
+                  } : null,
+                  icon: const Icon(Icons.thumb_up_outlined),
+                  label: Text('${post.likesCount} Likes'),
+                ),
+                const SizedBox(width: 16),
+                TextButton.icon(
                   onPressed: () {
-                    if (currentUser != null) {
-                      context.read<PostProvider>().toggleLike(post.id!, currentUser.id);
-                    }
+                    // TODO: Implement comments
                   },
-                ),
-                Text('${post.likesCount}'),
-                const SizedBox(width: 24),
-                IconButton(
                   icon: const Icon(Icons.comment_outlined),
-                  onPressed: () => _showComments(post.id!),
-                ),
-                Text('${post.commentsCount}'),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.share_outlined),
-                  onPressed: () => _sharePost(post.id!),
+                  label: Text('${post.commentsCount} Comments'),
                 ),
               ],
             ),
@@ -243,100 +245,115 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
   }
 
   void _showCreatePostDialog() {
-    final contentController = TextEditingController();
+    final currentUser = context.read<AuthProvider>().currentUser;
+
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please login to create posts')),
+      );
+      return;
+    }
 
     showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Create Post'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CustomTextField(
-                  controller: contentController,
-                  label: 'What\'s on your mind?',
-                  hintText: 'Share your thoughts, questions, or resources...',
-                  maxLines: 5,
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.image),
-                      onPressed: () {
-                        // TODO: Add image picker
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Image upload coming soon!')),
-                        );
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.attach_file),
-                      onPressed: () {
-                        // TODO: Add file picker
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('File upload coming soon!')),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
+      builder: (context) => AlertDialog(
+        title: const Text('Create Post'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CustomTextField(
+                controller: _titleController,
+                label: 'Title',
+                hint: 'Enter post title',
+              ),
+              const SizedBox(height: 16),
+              CustomTextField(
+                controller: _contentController,
+                label: 'Content',
+                hint: 'What would you like to share?',
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            CustomButton(
-              text: 'Post',
-              onPressed: () async {
-                if (contentController.text.isNotEmpty) {
-                  final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                  final currentUser = authProvider.currentUser;
-
-                  if (currentUser != null) {
-                    await context.read<PostProvider>().createPost(
-                      content: contentController.text,
-                      authorId: currentUser.id,
-                      authorName: currentUser.displayName,
-                      groupId: widget.groupId,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          Consumer<PostProvider>(
+            builder: (context, postProvider, child) {
+              return ElevatedButton(
+                onPressed: postProvider.isLoading ? null : () async {
+                  if (_titleController.text.trim().isEmpty ||
+                      _contentController.text.trim().isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please fill all fields')),
                     );
-
-                    if (mounted) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Post created successfully!')),
-                      );
-                    }
+                    return;
                   }
-                }
-              },
-            ),
-          ],
-        );
-      },
+
+                  await context.read<PostProvider>().createPost(
+                    authorId: currentUser.id.toString(),
+                    authorName: currentUser.displayName,
+                    title: _titleController.text.trim(),
+                    content: _contentController.text.trim(),
+                    groupId: widget.groupId,
+                  );
+
+                  _titleController.clear();
+                  _contentController.clear();
+                  Navigator.of(context).pop();
+                },
+                child: postProvider.isLoading
+                    ? const CircularProgressIndicator()
+                    : const Text('Post'),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 
-  void _reportPost(int postId) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Post reported. Thank you for your feedback.')),
+  void _showReportDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Report Post'),
+        content: const Text('This feature is not implemented yet.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
     );
   }
 
-  void _showComments(int postId) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Comments feature coming soon!')),
-    );
+  String _formatDate(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inMinutes < 1) {
+      return 'Just now';
+    } else if (difference.inHours < 1) {
+      return '${difference.inMinutes}m ago';
+    } else if (difference.inDays < 1) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d ago';
+    } else {
+      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+    }
   }
 
-  void _sharePost(int postId) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Post sharing coming soon!')),
-    );
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _contentController.dispose();
+    super.dispose();
   }
 }
