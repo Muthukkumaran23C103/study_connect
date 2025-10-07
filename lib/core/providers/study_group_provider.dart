@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import '../models/study_group_model.dart';
-import '../../services/database_service.dart';
+import '../services/database_service.dart';
 
-class StudyGroupProvider extends ChangeNotifier {
+class StudyGroupProvider with ChangeNotifier {
   final DatabaseService _databaseService = DatabaseService.instance;
-
   List<StudyGroup> _groups = [];
   List<StudyGroup> _userGroups = [];
   bool _isLoading = false;
@@ -16,39 +14,44 @@ class StudyGroupProvider extends ChangeNotifier {
   String? get error => _error;
 
   Future<void> loadGroups() async {
-    _setLoading(true);
+    _isLoading = true;
+    notifyListeners();
+
     try {
       _groups = await _databaseService.getStudyGroups();
       _error = null;
     } catch (e) {
       _error = e.toString();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-    _setLoading(false);
   }
 
   Future<void> loadUserGroups(String userId) async {
-    _setLoading(true);
+    _isLoading = true;
+    notifyListeners();
+
     try {
       _userGroups = await _databaseService.getUserGroups(userId);
       _error = null;
     } catch (e) {
       _error = e.toString();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-    _setLoading(false);
   }
 
   Future<void> joinGroup(int groupId, String userId) async {
     try {
       await _databaseService.joinGroup(groupId, userId);
 
-      // Add to user groups locally
       final group = _groups.firstWhere((g) => g.id == groupId);
       if (!_userGroups.any((g) => g.id == groupId)) {
         _userGroups.add(group);
+        notifyListeners();
       }
-
-      _error = null;
-      notifyListeners();
     } catch (e) {
       _error = e.toString();
       notifyListeners();
@@ -59,10 +62,7 @@ class StudyGroupProvider extends ChangeNotifier {
     try {
       await _databaseService.leaveGroup(groupId, userId);
 
-      // Remove from user groups locally
       _userGroups.removeWhere((g) => g.id == groupId);
-
-      _error = null;
       notifyListeners();
     } catch (e) {
       _error = e.toString();
@@ -74,32 +74,22 @@ class StudyGroupProvider extends ChangeNotifier {
     required String name,
     required String description,
     required String category,
+    required String createdBy,
   }) async {
     try {
       final group = StudyGroup(
         name: name,
         description: description,
         category: category,
-        memberCount: 1,
-        createdAt: DateTime.now(),
+        createdBy: int.parse(createdBy),
+        createdAt: DateTime.now().toIso8601String(),
+        updatedAt: DateTime.now().toIso8601String(),
       );
 
       final groupId = await _databaseService.insertStudyGroup(group);
-
-      // Add to local lists with the generated ID
-      final newGroup = StudyGroup(
-        id: groupId,
-        name: name,
-        description: description,
-        category: category,
-        memberCount: 1,
-        createdAt: DateTime.now(),
-      );
-
+      final newGroup = group.copyWith(id: groupId);
       _groups.add(newGroup);
       _userGroups.add(newGroup);
-
-      _error = null;
       notifyListeners();
     } catch (e) {
       _error = e.toString();
@@ -108,14 +98,18 @@ class StudyGroupProvider extends ChangeNotifier {
   }
 
   Future<void> searchGroups(String query) async {
-    _setLoading(true);
+    _isLoading = true;
+    notifyListeners();
+
     try {
       _groups = await _databaseService.searchStudyGroups(query);
       _error = null;
     } catch (e) {
       _error = e.toString();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-    _setLoading(false);
   }
 
   bool isUserInGroup(int groupId, String userId) {
@@ -128,15 +122,5 @@ class StudyGroupProvider extends ChangeNotifier {
     } catch (e) {
       return _userGroups.firstWhere((group) => group.id == groupId);
     }
-  }
-
-  void _setLoading(bool loading) {
-    _isLoading = loading;
-    notifyListeners();
-  }
-
-  void clearError() {
-    _error = null;
-    notifyListeners();
   }
 }

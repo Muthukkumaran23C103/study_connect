@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/providers/chat_provider.dart';
 import '../../core/providers/auth_provider.dart';
-import '../../core/models/study_group_model.dart';
+import '../../core/providers/chat_provider.dart';
+import '../../core/models/message_model.dart';
 import '../../widgets/chat/message_bubble.dart';
 import '../../widgets/chat/message_input.dart';
 
@@ -30,6 +30,13 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _messageController.dispose();
+    super.dispose();
+  }
+
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
@@ -40,6 +47,37 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  void _sendMessage() async {
+    final message = _messageController.text.trim();
+    if (message.isEmpty) return;
+
+    final authProvider = context.read<AuthProvider>();
+    final chatProvider = context.read<ChatProvider>();
+    final currentUser = authProvider.currentUser;
+
+    if (currentUser != null) {
+      _messageController.clear();
+
+      await chatProvider.sendMessage(
+        senderId: currentUser.id.toString(),
+        senderName: currentUser.displayName,
+        groupId: widget.group.id!,
+        content: message,
+      );
+
+      _scrollToBottom();
+    }
+  }
+
+  void _sendAttachment() async {
+    // TODO: Implement file picker and attachment sending
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Attachment feature coming soon!'),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -47,27 +85,34 @@ class _ChatScreenState extends State<ChatScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(widget.group.name),
             Text(
-              '${widget.group.memberCount} members',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+              widget.group.name,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(
+              widget.group.category,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+              ),
             ),
           ],
         ),
-        backgroundColor: Theme.of(context).primaryColor,
-        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.info_outline),
-            onPressed: _showGroupInfo,
+            onPressed: () {
+              // TODO: Show group info
+            },
           ),
         ],
       ),
       body: Column(
         children: [
           Expanded(
-            child: Consumer<ChatProvider>(
-              builder: (context, chatProvider, child) {
+            child: Consumer2<ChatProvider, AuthProvider>(
+              builder: (context, chatProvider, authProvider, child) {
                 if (chatProvider.isLoading) {
                   return const Center(child: CircularProgressIndicator());
                 }
@@ -78,7 +123,6 @@ class _ChatScreenState extends State<ChatScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text('Error: ${chatProvider.error}'),
-                        const SizedBox(height: 16),
                         ElevatedButton(
                           onPressed: () {
                             chatProvider.loadMessages(widget.group.id!);
@@ -90,45 +134,29 @@ class _ChatScreenState extends State<ChatScreen> {
                   );
                 }
 
-                final messages = chatProvider.getMessagesForGroup(widget.group.id!);
+                final messages = chatProvider.messages;
+                final currentUser = authProvider.currentUser;
 
                 if (messages.isEmpty) {
                   return const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey),
-                        SizedBox(height: 16),
-                        Text(
-                          'No messages yet',
-                          style: TextStyle(fontSize: 18, color: Colors.grey),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Start the conversation!',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ],
-                    ),
+                    child: Text('No messages yet. Start the conversation!'),
                   );
                 }
 
-                WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
-
                 return ListView.builder(
                   controller: _scrollController,
+                  padding: const EdgeInsets.all(16),
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final message = messages[index];
-                    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                    final currentUser = authProvider.currentUser;
-                    final isOwnMessage = currentUser?.id == message.senderId;
+                    final isOwnMessage = currentUser != null &&
+                        message.senderId == currentUser.id.toString();
 
                     return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      padding: const EdgeInsets.only(bottom: 8),
                       child: MessageBubble(
                         message: message,
-                        alignment: isOwnMessage ? MainAxisAlignment.end : MainAxisAlignment.start,
+                        isOwn: isOwnMessage,
                       ),
                     );
                   },
@@ -136,90 +164,12 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  offset: const Offset(0, -2),
-                  blurRadius: 4,
-                  color: Colors.black.withOpacity(0.1),
-                ),
-              ],
-            ),
-            child: MessageInput(
-              onSendMessage: _sendMessage,
-              onSendImage: _sendImage,
-            ),
+          MessageInput(
+            onSendMessage: _sendMessage,
+            onSendAttachment: _sendAttachment,
           ),
         ],
       ),
     );
-  }
-
-  void _sendMessage(String content) {
-    if (content.trim().isEmpty) return;
-
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final currentUser = authProvider.currentUser;
-
-    if (currentUser != null) {
-      context.read<ChatProvider>().sendMessage(
-        content: content.trim(),
-        senderId: currentUser.id,
-        senderName: currentUser.displayName,
-        groupId: widget.group.id!,
-      );
-      _messageController.clear();
-      _scrollToBottom();
-    }
-  }
-
-  void _sendImage() {
-    // TODO: Implement image sending
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Image sending coming soon!')),
-    );
-  }
-
-  void _showGroupInfo() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(widget.group.name),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Category: ${widget.group.category}'),
-              const SizedBox(height: 8),
-              Text('Members: ${widget.group.memberCount}'),
-              const SizedBox(height: 8),
-              Text('Description: ${widget.group.description}'),
-              const SizedBox(height: 16),
-              Text(
-                'Created: ${widget.group.createdAt.day}/${widget.group.createdAt.month}/${widget.group.createdAt.year}',
-                style: TextStyle(color: Colors.grey),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  @override
-  void dispose() {
-    _messageController.dispose();
-    _scrollController.dispose();
-    super.dispose();
   }
 }

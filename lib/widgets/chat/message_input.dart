@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
 class MessageInput extends StatefulWidget {
-  final Function(String) onSendMessage;
-  final VoidCallback onSendImage;
+  final VoidCallback onSendMessage;
+  final VoidCallback onSendAttachment;
 
   const MessageInput({
     super.key,
     required this.onSendMessage,
-    required this.onSendImage,
+    required this.onSendAttachment,
   });
 
   @override
@@ -21,70 +21,90 @@ class _MessageInputState extends State<MessageInput> {
   @override
   void initState() {
     super.initState();
-    _controller.addListener(() {
-      setState(() {
-        _hasText = _controller.text.trim().isNotEmpty;
-      });
+    _controller.addListener(_onTextChanged);
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onTextChanged);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onTextChanged() {
+    setState(() {
+      _hasText = _controller.text.trim().isNotEmpty;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        IconButton(
-          icon: const Icon(Icons.image),
-          onPressed: widget.onSendImage,
-          color: Theme.of(context).primaryColor,
-        ),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: Colors.grey,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.grey!),
-            ),
-            child: TextField(
-              controller: _controller,
-              decoration: const InputDecoration(
-                hintText: 'Type a message...',
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(vertical: 12),
-              ),
-              textCapitalization: TextCapitalization.sentences,
-              maxLines: null,
-              onSubmitted: (text) {
-                if (text.trim().isNotEmpty) {
-                  widget.onSendMessage(text);
-                  _controller.clear();
-                }
-              },
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Container(
-          decoration: BoxDecoration(
-            color: _hasText ? Theme.of(context).primaryColor : Colors.grey,
-            shape: BoxShape.circle,
-          ),
-          child: IconButton(
-            icon: const Icon(Icons.send),
-            onPressed: _hasText ? () {
-              widget.onSendMessage(_controller.text);
-              _controller.clear();
-            } : null,
-            color: Colors.white,
-          ),
-        ),
-      ],
-    );
-  }
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        border: Border(
+          top: BorderSide(
+            color: colorScheme.outline.withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            IconButton(
+              onPressed: widget.onSendAttachment,
+              icon: const Icon(Icons.attach_file),
+              color: colorScheme.onSurfaceVariant,
+            ),
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceVariant.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: TextField(
+                  controller: _controller,
+                  maxLines: null,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: InputDecoration(
+                    hintText: 'Type a message...',
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    border: InputBorder.none,
+                    hintStyle: TextStyle(
+                      color: colorScheme.onSurfaceVariant.withOpacity(0.6),
+                    ),
+                  ),
+                  onSubmitted: _hasText ? (_) => widget.onSendMessage() : null,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              decoration: BoxDecoration(
+                color: _hasText ? colorScheme.primary : Colors.transparent,
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                onPressed: _hasText ? widget.onSendMessage : null,
+                icon: Icon(
+                  Icons.send,
+                  color: _hasText
+                      ? colorScheme.onPrimary
+                      : colorScheme.onSurfaceVariant.withOpacity(0.4),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

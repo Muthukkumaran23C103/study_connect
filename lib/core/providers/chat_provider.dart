@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import '../models/message_model.dart';
-import '../../services/database_service.dart';
+import '../services/database_service.dart';
 
-class ChatProvider extends ChangeNotifier {
+class ChatProvider with ChangeNotifier {
   final DatabaseService _databaseService = DatabaseService.instance;
-
   List<Message> _messages = [];
   bool _isLoading = false;
   String? _error;
@@ -14,18 +12,18 @@ class ChatProvider extends ChangeNotifier {
   String? get error => _error;
 
   Future<void> loadMessages(int groupId) async {
-    _setLoading(true);
+    _isLoading = true;
+    notifyListeners();
+
     try {
       _messages = await _databaseService.getMessagesForGroup(groupId);
       _error = null;
     } catch (e) {
       _error = e.toString();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-    _setLoading(false);
-  }
-
-  List<Message> getMessagesForGroup(int groupId) {
-    return _messages.where((message) => message.groupId == groupId).toList();
   }
 
   Future<Message?> getLastMessage(int groupId) async {
@@ -33,44 +31,36 @@ class ChatProvider extends ChangeNotifier {
       return await _databaseService.getLastMessage(groupId);
     } catch (e) {
       _error = e.toString();
+      notifyListeners();
       return null;
     }
   }
 
   Future<void> sendMessage({
-    required String content,
     required String senderId,
     required String senderName,
     required int groupId,
+    required String content,
     String messageType = 'text',
     String? attachmentUrl,
+    String? senderAvatar,
   }) async {
     try {
       final message = Message(
-        content: content,
         senderId: senderId,
         senderName: senderName,
         groupId: groupId,
+        content: content,
         messageType: messageType,
-        createdAt: DateTime.now(),
         attachmentUrl: attachmentUrl,
+        senderAvatar: senderAvatar,
+        timestamp: DateTime.now().toIso8601String(),
       );
 
       final messageId = await _databaseService.insertMessage(message);
 
-      // Add to local list with the generated ID
-      _messages.add(Message(
-        id: messageId,
-        content: content,
-        senderId: senderId,
-        senderName: senderName,
-        groupId: groupId,
-        messageType: messageType,
-        createdAt: DateTime.now(),
-        attachmentUrl: attachmentUrl,
-      ));
-
-      _error = null;
+      final newMessage = message.copyWith(id: messageId);
+      _messages.add(newMessage);
       notifyListeners();
     } catch (e) {
       _error = e.toString();
@@ -78,13 +68,8 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
-  void _setLoading(bool loading) {
-    _isLoading = loading;
-    notifyListeners();
-  }
-
-  void clearError() {
-    _error = null;
+  void clearMessages() {
+    _messages.clear();
     notifyListeners();
   }
 }
