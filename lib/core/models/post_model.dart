@@ -1,40 +1,40 @@
 class Post {
   final int? id;
   final String authorId;
+  final String authorName;
   final int? groupId;
   final String title;
-  final String? content;
-  final String? attachmentUrls;
+  final String content;
+  final String? attachmentUrl;
   final int likesCount;
   final int commentsCount;
-  final String createdAt;
-  final String? updatedAt;
+  final DateTime createdAt;
 
   Post({
     this.id,
     required this.authorId,
+    required this.authorName,
     this.groupId,
     required this.title,
-    this.content,
-    this.attachmentUrls,
+    required this.content,
+    this.attachmentUrl,
     this.likesCount = 0,
     this.commentsCount = 0,
     required this.createdAt,
-    this.updatedAt,
   });
 
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'authorId': authorId,
+      'authorName': authorName,
       'groupId': groupId,
       'title': title,
       'content': content,
-      'attachmentUrls': attachmentUrls,
+      'attachmentUrl': attachmentUrl,
       'likesCount': likesCount,
       'commentsCount': commentsCount,
-      'createdAt': createdAt,
-      'updatedAt': updatedAt,
+      'createdAt': createdAt.toIso8601String(),
     };
   }
 
@@ -42,40 +42,40 @@ class Post {
     return Post(
       id: map['id']?.toInt(),
       authorId: map['authorId'] ?? '',
+      authorName: map['authorName'] ?? '',
       groupId: map['groupId']?.toInt(),
       title: map['title'] ?? '',
-      content: map['content'],
-      attachmentUrls: map['attachmentUrls'],
+      content: map['content'] ?? '',
+      attachmentUrl: map['attachmentUrl'],
       likesCount: map['likesCount']?.toInt() ?? 0,
       commentsCount: map['commentsCount']?.toInt() ?? 0,
-      createdAt: map['createdAt'] ?? '',
-      updatedAt: map['updatedAt'],
+      createdAt: DateTime.parse(map['createdAt'] ?? DateTime.now().toIso8601String()),
     );
   }
 
   Post copyWith({
     int? id,
     String? authorId,
+    String? authorName,
     int? groupId,
     String? title,
     String? content,
-    String? attachmentUrls,
+    String? attachmentUrl,
     int? likesCount,
     int? commentsCount,
-    String? createdAt,
-    String? updatedAt,
+    DateTime? createdAt,
   }) {
     return Post(
       id: id ?? this.id,
       authorId: authorId ?? this.authorId,
+      authorName: authorName ?? this.authorName,
       groupId: groupId ?? this.groupId,
       title: title ?? this.title,
       content: content ?? this.content,
-      attachmentUrls: attachmentUrls ?? this.attachmentUrls,
+      attachmentUrl: attachmentUrl ?? this.attachmentUrl,
       likesCount: likesCount ?? this.likesCount,
       commentsCount: commentsCount ?? this.commentsCount,
       createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 }

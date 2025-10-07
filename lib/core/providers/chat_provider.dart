@@ -1,15 +1,15 @@
-import 'package:flutter/material.dart';
-import '../services/database_service.dart';
+import 'package:flutter/foundation.dart';
+import '../../services/database_service.dart';
+import '../models/message_model.dart';
+import '../models/user_model.dart';
 
-class ChatProvider with ChangeNotifier {
+class ChatProvider extends ChangeNotifier {
   final DatabaseService _databaseService = DatabaseService.instance;
   List<Message> _messages = [];
   bool _isLoading = false;
-  String? _error;
 
   List<Message> get messages => _messages;
   bool get isLoading => _isLoading;
-  String? get error => _error;
 
   Future<void> loadMessages(int groupId) async {
     _isLoading = true;
@@ -17,9 +17,9 @@ class ChatProvider with ChangeNotifier {
 
     try {
       _messages = await _databaseService.getMessagesForGroup(groupId);
-      _error = null;
+      notifyListeners();
     } catch (e) {
-      _error = e.toString();
+      print('Error loading messages: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -30,31 +30,28 @@ class ChatProvider with ChangeNotifier {
     try {
       return await _databaseService.getLastMessage(groupId);
     } catch (e) {
-      _error = e.toString();
-      notifyListeners();
+      print('Error getting last message: $e');
       return null;
     }
   }
 
   Future<void> sendMessage({
+    required int groupId,
     required String senderId,
     required String senderName,
-    required int groupId,
     required String content,
     String messageType = 'text',
     String? attachmentUrl,
-    String? senderAvatar,
   }) async {
     try {
       final message = Message(
+        groupId: groupId,
         senderId: senderId,
         senderName: senderName,
-        groupId: groupId,
         content: content,
         messageType: messageType,
         attachmentUrl: attachmentUrl,
-        senderAvatar: senderAvatar,
-        timestamp: DateTime.now().toIso8601String(),
+        timestamp: DateTime.now(),
       );
 
       final messageId = await _databaseService.insertMessage(message);
@@ -63,8 +60,7 @@ class ChatProvider with ChangeNotifier {
       _messages.add(newMessage);
       notifyListeners();
     } catch (e) {
-      _error = e.toString();
-      notifyListeners();
+      print('Error sending message: $e');
     }
   }
 

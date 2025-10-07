@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'core/providers/auth_provider.dart';
-import 'core/providers/chat_provider.dart';
-import 'core/providers/post_provider.dart';
-import 'core/providers/study_group_provider.dart';
-import 'core/theme/app_theme.dart';
-import 'screens/splash/splash_screen.dart';
-import 'services/database_service.dart';
+import 'package:study_connect/core/providers/auth_provider.dart';
+import 'package:study_connect/core/providers/chat_provider.dart';
+import 'package:study_connect/core/providers/post_provider.dart';
+import 'package:study_connect/core/providers/study_group_provider.dart';
+import 'package:study_connect/services/database_service.dart';
+import 'package:study_connect/core/theme/app_theme.dart';
+import 'package:study_connect/screens/splash/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,12 +14,10 @@ void main() async {
   // Initialize database
   await DatabaseService.instance.database;
 
-  runApp(const StudyConnectApp());
+  runApp(StudyConnectApp());
 }
 
 class StudyConnectApp extends StatelessWidget {
-  const StudyConnectApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -39,11 +37,9 @@ class StudyConnectApp extends StatelessWidget {
       ],
       child: MaterialApp(
         title: 'StudyConnect',
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
-        themeMode: ThemeMode.system,
-        home: const SplashScreen(),
         debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        home: SplashScreen(),
       ),
     );
   }

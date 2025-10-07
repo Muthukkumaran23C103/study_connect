@@ -1,15 +1,14 @@
-import 'package:flutter/material.dart';
-import '../services/database_service.dart';
+import 'package:flutter/foundation.dart';
+import '../../services/database_service.dart';
+import '../models/post_model.dart';
 
-class PostProvider with ChangeNotifier {
+class PostProvider extends ChangeNotifier {
   final DatabaseService _databaseService = DatabaseService.instance;
   List<Post> _posts = [];
   bool _isLoading = false;
-  String? _error;
 
   List<Post> get posts => _posts;
   bool get isLoading => _isLoading;
-  String? get error => _error;
 
   Future<void> loadAllPosts() async {
     _isLoading = true;
@@ -17,9 +16,9 @@ class PostProvider with ChangeNotifier {
 
     try {
       _posts = await _databaseService.getAllPosts();
-      _error = null;
+      notifyListeners();
     } catch (e) {
-      _error = e.toString();
+      print('Error loading posts: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -32,9 +31,9 @@ class PostProvider with ChangeNotifier {
 
     try {
       _posts = await _databaseService.getGroupPosts(groupId);
-      _error = null;
+      notifyListeners();
     } catch (e) {
-      _error = e.toString();
+      print('Error loading group posts: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -43,22 +42,21 @@ class PostProvider with ChangeNotifier {
 
   Future<void> createPost({
     required String authorId,
+    required String authorName,
     int? groupId,
     required String title,
-    String? content,
-    List<String>? attachmentUrls,
+    required String content,
+    String? attachmentUrl,
   }) async {
     try {
       final post = Post(
         authorId: authorId,
+        authorName: authorName,
         groupId: groupId,
         title: title,
         content: content,
-        attachmentUrls: attachmentUrls?.join(','),
-        likesCount: 0,
-        commentsCount: 0,
-        createdAt: DateTime.now().toIso8601String(),
-        updatedAt: DateTime.now().toIso8601String(),
+        attachmentUrl: attachmentUrl,
+        createdAt: DateTime.now(),
       );
 
       final postId = await _databaseService.insertPost(post);
@@ -66,27 +64,25 @@ class PostProvider with ChangeNotifier {
       _posts.insert(0, newPost);
       notifyListeners();
     } catch (e) {
-      _error = e.toString();
-      notifyListeners();
+      print('Error creating post: $e');
     }
   }
 
   Future<void> toggleLike(int postId, String userId) async {
     try {
-      await _databaseService.togglePostLike(postId, userId);
+      await _databaseService.toggleLike(postId, userId);
 
       final postIndex = _posts.indexWhere((post) => post.id == postId);
       if (postIndex != -1) {
-        final post = _posts[postIndex];
         final isLiked = await _databaseService.isPostLiked(postId, userId);
+        final post = _posts[postIndex];
         _posts[postIndex] = post.copyWith(
           likesCount: isLiked ? post.likesCount + 1 : post.likesCount - 1,
         );
         notifyListeners();
       }
     } catch (e) {
-      _error = e.toString();
-      notifyListeners();
+      print('Error toggling like: $e');
     }
   }
 
@@ -94,6 +90,7 @@ class PostProvider with ChangeNotifier {
     try {
       return await _databaseService.isPostLiked(postId, userId);
     } catch (e) {
+      print('Error checking if post is liked: $e');
       return false;
     }
   }

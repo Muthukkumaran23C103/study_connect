@@ -4,19 +4,19 @@ class StudyGroup {
   final String description;
   final String category;
   final bool isPublic;
-  final int createdBy;
-  final String createdAt;
-  final String updatedAt;
+  final String createdBy;
+  final DateTime createdAt;
+  final int memberCount;
 
   StudyGroup({
     this.id,
     required this.name,
     required this.description,
     required this.category,
-    this.isPublic = true,
+    required this.isPublic,
     required this.createdBy,
     required this.createdAt,
-    required this.updatedAt,
+    this.memberCount = 0,
   });
 
   Map<String, dynamic> toMap() {
@@ -27,8 +27,7 @@ class StudyGroup {
       'category': category,
       'isPublic': isPublic ? 1 : 0,
       'createdBy': createdBy,
-      'createdAt': createdAt,
-      'updatedAt': updatedAt,
+      'createdAt': createdAt.toIso8601String(),
     };
   }
 
@@ -39,9 +38,9 @@ class StudyGroup {
       description: map['description'] ?? '',
       category: map['category'] ?? '',
       isPublic: (map['isPublic'] ?? 1) == 1,
-      createdBy: map['createdBy']?.toInt() ?? 0,
-      createdAt: map['createdAt'] ?? '',
-      updatedAt: map['updatedAt'] ?? '',
+      createdBy: map['createdBy'] ?? '',
+      createdAt: DateTime.parse(map['createdAt'] ?? DateTime.now().toIso8601String()),
+      memberCount: map['memberCount'] ?? 0,
     );
   }
 
@@ -51,9 +50,9 @@ class StudyGroup {
     String? description,
     String? category,
     bool? isPublic,
-    int? createdBy,
-    String? createdAt,
-    String? updatedAt,
+    String? createdBy,
+    DateTime? createdAt,
+    int? memberCount,
   }) {
     return StudyGroup(
       id: id ?? this.id,
@@ -63,7 +62,7 @@ class StudyGroup {
       isPublic: isPublic ?? this.isPublic,
       createdBy: createdBy ?? this.createdBy,
       createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
+      memberCount: memberCount ?? this.memberCount,
     );
   }
 }
