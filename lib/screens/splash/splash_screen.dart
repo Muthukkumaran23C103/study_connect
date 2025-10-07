@@ -66,25 +66,43 @@ class _SplashScreenState extends State<SplashScreen>
 
     // Wait and start text animation
     await Future.delayed(const Duration(milliseconds: 600));
-    _textController.forward();
+    if (mounted) {
+      _textController.forward();
+    }
 
     // Check authentication after animations
-    await Future.delayed(const Duration(milliseconds: 2000));
-    _checkAuthAndNavigate();
+    await Future.delayed(const Duration(milliseconds: 1500));
+    if (mounted) {
+      _checkAuthAndNavigate();
+    }
   }
 
   void _checkAuthAndNavigate() async {
     if (!mounted) return;
 
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    await authProvider.loadUserSession();
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
-    if (!mounted) return;
+      // Load user session with timeout
+      await Future.any([
+        authProvider.loadUserSession(),
+        Future.delayed(const Duration(seconds: 5)), // 5 second timeout
+      ]);
 
-    if (authProvider.isAuthenticated) {
-      Navigator.pushReplacementNamed(context, AppRoutes.home);
-    } else {
-      Navigator.pushReplacementNamed(context, AppRoutes.login);
+      if (!mounted) return;
+
+      // Navigate based on authentication status
+      if (authProvider.isAuthenticated && authProvider.currentUser != null) {
+        Navigator.pushReplacementNamed(context, AppRoutes.home);
+      } else {
+        Navigator.pushReplacementNamed(context, AppRoutes.login);
+      }
+    } catch (e) {
+      print('Error during authentication check: $e');
+      if (mounted) {
+        // If there's an error, go to login screen
+        Navigator.pushReplacementNamed(context, AppRoutes.login);
+      }
     }
   }
 
@@ -132,7 +150,6 @@ class _SplashScreenState extends State<SplashScreen>
                 );
               },
             ),
-
             const SizedBox(height: 40),
 
             // Animated Text
@@ -160,7 +177,6 @@ class _SplashScreenState extends State<SplashScreen>
                 ),
               ),
             ),
-
             const SizedBox(height: 60),
 
             // Loading indicator

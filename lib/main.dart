@@ -5,6 +5,7 @@ import 'core/providers/chat_provider.dart';
 import 'core/providers/post_provider.dart';
 import 'core/providers/study_group_provider.dart';
 import 'core/theme/app_theme.dart';
+import 'core/routes/app_routes.dart';
 import 'screens/splash/splash_screen.dart';
 
 void main() {
@@ -16,16 +17,16 @@ class StudyConnectApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider<AuthProvider>(
+        ChangeNotifierProvider(
           create: (context) => AuthProvider(),
         ),
-        ChangeNotifierProvider<ChatProvider>(
+        ChangeNotifierProvider(
           create: (context) => ChatProvider(),
         ),
-        ChangeNotifierProvider<PostProvider>(
+        ChangeNotifierProvider(
           create: (context) => PostProvider(),
         ),
-        ChangeNotifierProvider<StudyGroupProvider>(
+        ChangeNotifierProvider(
           create: (context) => StudyGroupProvider(),
         ),
       ],
@@ -33,7 +34,9 @@ class StudyConnectApp extends StatelessWidget {
         title: 'StudyConnect',
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
-        home: SplashScreen(),
+        // FIXED: Added proper route generation
+        onGenerateRoute: AppRoutes.generateRoute,
+        initialRoute: AppRoutes.splash,
         debugShowCheckedModeBanner: false,
       ),
     );

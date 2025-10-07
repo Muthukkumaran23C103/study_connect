@@ -6,8 +6,11 @@ import '../../core/models/study_group_model.dart';
 import '../../widgets/common/custom_text_field.dart';
 
 class StudyGroupsScreen extends StatefulWidget {
+  // Added const constructor to fix the const usage in HomeScreen
+  const StudyGroupsScreen({super.key});
+
   @override
-  _StudyGroupsScreenState createState() => _StudyGroupsScreenState();
+  State<StudyGroupsScreen> createState() => _StudyGroupsScreenState();
 }
 
 class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
@@ -20,13 +23,19 @@ class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
   }
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Study Groups'),
+        title: const Text('Study Groups'),
         actions: [
           IconButton(
-            icon: Icon(Icons.add),
+            icon: const Icon(Icons.add),
             onPressed: () => _showCreateGroupDialog(context),
           ),
         ],
@@ -34,7 +43,7 @@ class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
       body: Consumer<StudyGroupProvider>(
         builder: (context, groupProvider, child) {
           if (groupProvider.isLoading) {
-            return Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator());
           }
 
           if (groupProvider.errorMessage != null) {
@@ -45,7 +54,7 @@ class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
                   Text('Error: ${groupProvider.errorMessage}'),
                   ElevatedButton(
                     onPressed: () => groupProvider.loadGroups(),
-                    child: Text('Retry'),
+                    child: const Text('Retry'),
                   ),
                 ],
               ),
@@ -53,7 +62,6 @@ class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
           }
 
           final groups = groupProvider.groups;
-
           return Column(
             children: [
               Padding(
@@ -74,7 +82,7 @@ class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
                 child: RefreshIndicator(
                   onRefresh: () => groupProvider.loadGroups(),
                   child: groups.isEmpty
-                      ? Center(child: Text('No groups found'))
+                      ? const Center(child: Text('No groups found'))
                       : ListView.builder(
                     itemCount: groups.length,
                     itemBuilder: (context, index) {
@@ -95,23 +103,23 @@ class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
     final authProvider = context.read<AuthProvider>();
     final groupProvider = context.read<StudyGroupProvider>();
     final currentUser = authProvider.currentUser;
-
-    final isMember = groupProvider.isUserInGroup(group.id!, currentUser?.id.toString() ?? '');
+    final isMember = groupProvider.isUserInGroup(
+        group.id!, currentUser?.id.toString() ?? '');
 
     return Card(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Padding(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 CircleAvatar(
-                  child: Icon(_getCategoryIcon(group.category)),
                   backgroundColor: _getCategoryColor(group.category),
+                  child: Icon(_getCategoryIcon(group.category)),
                 ),
-                SizedBox(width: 12),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -133,12 +141,12 @@ class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
                 ),
               ],
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 8),
             Text(
               group.description,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
-            SizedBox(height: 12),
+            const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -149,15 +157,15 @@ class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
                       '/chat',
                       arguments: {'group': group},
                     ),
-                    icon: Icon(Icons.chat),
-                    label: Text('Chat'),
+                    icon: const Icon(Icons.chat),
+                    label: const Text('Chat'),
                   )
                 else
                   ElevatedButton(
                     onPressed: () => _joinGroup(context, group),
-                    child: Text('Join'),
+                    child: const Text('Join'),
                   ),
-                SizedBox(width: 8),
+                const SizedBox(width: 8),
                 Text('${group.memberCount} members'),
               ],
             ),
@@ -171,8 +179,10 @@ class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
     switch (category.toLowerCase()) {
       case 'ai':
         return Icons.psychology;
+      case 'dev':
       case 'mobile development':
         return Icons.phone_android;
+      case 'os':
       case 'operating systems':
         return Icons.computer;
       default:
@@ -184,8 +194,10 @@ class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
     switch (category.toLowerCase()) {
       case 'ai':
         return Colors.purple.shade100;
+      case 'dev':
       case 'mobile development':
         return Colors.blue.shade100;
+      case 'os':
       case 'operating systems':
         return Colors.green.shade100;
       default:
@@ -200,17 +212,18 @@ class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
     final currentUserId = currentUser!.id.toString();
 
     await groupProvider.joinGroup(group.id!, currentUserId);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Joined ${group.name}!')),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Joined ${group.name}!')),
+      );
+    }
   }
 
   void _showCreateGroupDialog(BuildContext context) {
     final TextEditingController nameController = TextEditingController();
     final TextEditingController descriptionController = TextEditingController();
     String selectedCategory = 'General';
-    final categories = ['AI', 'Mobile Development', 'Operating Systems', 'General'];
+    final categories = ['AI', 'DEV', 'OS', 'General'];
 
     showDialog(
       context: context,
@@ -218,7 +231,7 @@ class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: Text('Create Study Group'),
+              title: const Text('Create Study Group'),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -227,15 +240,15 @@ class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
                       controller: nameController,
                       label: 'Group Name',
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     CustomTextField(
                       controller: descriptionController,
                       label: 'Description',
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
                       value: selectedCategory,
-                      decoration: InputDecoration(
+                      decoration: const InputDecoration(
                         labelText: 'Category',
                         border: OutlineInputBorder(),
                       ),
@@ -257,7 +270,7 @@ class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: Text('Cancel'),
+                  child: const Text('Cancel'),
                 ),
                 ElevatedButton(
                   onPressed: () async {
@@ -269,50 +282,20 @@ class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
                         descriptionController.text,
                         selectedCategory,
                       );
-                      Navigator.of(context).pop();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Group created successfully!')),
-                      );
+                      if (mounted) {
+                        Navigator.of(context).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text('Group created successfully!')),
+                        );
+                      }
                     }
                   },
-                  child: Text('Create'),
+                  child: const Text('Create'),
                 ),
               ],
             );
           },
-        );
-      },
-    );
-  }
-
-  void _showSearchFilters(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      builder: (BuildContext context) {
-        return Container(
-          height: 200,
-          child: Column(
-            children: [
-              ListTile(
-                title: Text('Filter by Category'),
-                leading: Icon(Icons.filter_list),
-              ),
-              ListTile(
-                title: Text('All Categories'),
-                onTap: () {
-                  context.read<StudyGroupProvider>().loadGroups();
-                  Navigator.pop(context);
-                },
-              ),
-              ListTile(
-                title: Text('AI'),
-                onTap: () {
-                  context.read<StudyGroupProvider>().searchGroups('AI');
-                  Navigator.pop(context);
-                },
-              ),
-            ],
-          ),
         );
       },
     );

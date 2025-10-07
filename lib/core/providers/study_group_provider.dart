@@ -46,8 +46,8 @@ class StudyGroupProvider extends ChangeNotifier {
 
   Future<void> joinGroup(int groupId, String userId) async {
     try {
-      await _databaseService.joinGroup(groupId.toString(), userId);
-
+      // FIXED: Removed .toString() since groupId is already int
+      await _databaseService.joinGroup(groupId, userId);
       final group = _groups.firstWhere((g) => g.id == groupId);
       if (!_userGroups.any((g) => g.id == groupId)) {
         _userGroups.add(group);
@@ -61,8 +61,8 @@ class StudyGroupProvider extends ChangeNotifier {
 
   Future<void> leaveGroup(int groupId, String userId) async {
     try {
-      await _databaseService.leaveGroup(groupId.toString(), userId);
-
+      // FIXED: Removed .toString() since groupId is already int
+      await _databaseService.leaveGroup(groupId, userId);
       _userGroups.removeWhere((g) => g.id == groupId);
       notifyListeners();
     } catch (e) {
@@ -73,16 +73,17 @@ class StudyGroupProvider extends ChangeNotifier {
 
   Future<void> createGroup(String name, String description, String category) async {
     try {
+      // FIXED: Added createdAt parameter
       final group = StudyGroup(
         name: name,
         description: description,
         category: category,
         createdBy: 1, // Replace with actual user ID as int
         memberCount: 1,
+        createdAt: DateTime.now(), // ADDED THIS LINE
       );
 
       final groupId = await _databaseService.insertStudyGroup(group);
-
       final newGroup = group.copyWith(id: groupId);
       _groups.add(newGroup);
       _userGroups.add(newGroup);
@@ -116,7 +117,11 @@ class StudyGroupProvider extends ChangeNotifier {
     try {
       return _groups.firstWhere((group) => group.id == groupId);
     } catch (e) {
-      return _userGroups.firstWhere((group) => group.id == groupId);
+      try {
+        return _userGroups.firstWhere((group) => group.id == groupId);
+      } catch (e) {
+        return null;
+      }
     }
   }
 }

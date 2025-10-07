@@ -16,8 +16,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
+  // FIXED: Changed to use const StudyGroupsScreen() with proper constructor
   final List<Widget> _screens = [
-    const StudyGroupsScreen(),
+    const StudyGroupsScreen(), // NOW WITH const
     const ChatListScreen(),
     const PostFeedScreen(),
     const ProfileScreen(),
