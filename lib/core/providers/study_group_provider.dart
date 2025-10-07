@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
-import '../../core/models/study_group_model.dart';
+import 'package:flutter/foundation.dart';
 import '../../services/database_service.dart';
+import '../models/study_group_model.dart';
 
 class StudyGroupProvider extends ChangeNotifier {
   final DatabaseService _databaseService = DatabaseService.instance;
@@ -15,49 +15,39 @@ class StudyGroupProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   Future<void> loadGroups() async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
-
+    _setLoading(true);
     try {
       _groups = await _databaseService.getStudyGroups();
       _errorMessage = null;
     } catch (e) {
-      _errorMessage = 'Error loading groups: $e';
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+      _errorMessage = e.toString();
     }
+    _setLoading(false);
   }
 
   Future<void> loadUserGroups(String userId) async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
-
+    _setLoading(true);
     try {
       _userGroups = await _databaseService.getUserGroups(userId);
       _errorMessage = null;
     } catch (e) {
-      _errorMessage = 'Error loading user groups: $e';
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+      _errorMessage = e.toString();
     }
+    _setLoading(false);
   }
 
   Future<void> joinGroup(int groupId, String userId) async {
     try {
       await _databaseService.joinGroup(groupId, userId);
 
-      // Update local lists
+      // Update local state
       final group = _groups.firstWhere((g) => g.id == groupId);
       if (!_userGroups.any((g) => g.id == groupId)) {
         _userGroups.add(group);
-        notifyListeners();
       }
+      notifyListeners();
     } catch (e) {
-      _errorMessage = 'Error joining group: $e';
+      _errorMessage = e.toString();
       notifyListeners();
     }
   }
@@ -66,11 +56,11 @@ class StudyGroupProvider extends ChangeNotifier {
     try {
       await _databaseService.leaveGroup(groupId, userId);
 
-      // Update local lists
+      // Update local state
       _userGroups.removeWhere((g) => g.id == groupId);
       notifyListeners();
     } catch (e) {
-      _errorMessage = 'Error leaving group: $e';
+      _errorMessage = e.toString();
       notifyListeners();
     }
   }
@@ -81,38 +71,41 @@ class StudyGroupProvider extends ChangeNotifier {
         name: name,
         description: description,
         category: category,
-        createdBy: 1, // Fixed: Use int value, not string
+        createdBy: 1, // Replace with actual current user ID
         memberCount: 1,
         createdAt: DateTime.now(),
       );
 
       final groupId = await _databaseService.insertStudyGroup(group);
-      if (groupId != null) {
-        final newGroup = group.copyWith(id: groupId);
-        _groups.insert(0, newGroup);
-        _userGroups.insert(0, newGroup);
-        notifyListeners();
-      }
+
+      // Add the new group to local list
+      final newGroup = StudyGroup(
+        id: groupId,
+        name: name,
+        description: description,
+        category: category,
+        createdBy: 1,
+        memberCount: 1,
+        createdAt: DateTime.now(),
+      );
+
+      _groups.insert(0, newGroup);
+      notifyListeners();
     } catch (e) {
-      _errorMessage = 'Error creating group: $e';
+      _errorMessage = e.toString();
       notifyListeners();
     }
   }
 
   Future<void> searchGroups(String query) async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
-
+    _setLoading(true);
     try {
       _groups = await _databaseService.searchStudyGroups(query);
       _errorMessage = null;
     } catch (e) {
-      _errorMessage = 'Error searching groups: $e';
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+      _errorMessage = e.toString();
     }
+    _setLoading(false);
   }
 
   bool isUserInGroup(int groupId, String userId) {
@@ -125,5 +118,10 @@ class StudyGroupProvider extends ChangeNotifier {
     } catch (e) {
       return _userGroups.firstWhere((group) => group.id == groupId);
     }
+  }
+
+  void _setLoading(bool loading) {
+    _isLoading = loading;
+    notifyListeners();
   }
 }
