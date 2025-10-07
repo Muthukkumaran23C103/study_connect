@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/providers/study_group_provider.dart';
-import '../../core/providers/auth_provider.dart';
-import '../chat/chat_screen.dart';
+import '../providers/auth_provider.dart';
+import '../providers/study_group_provider.dart';
+import '../models/study_group_model.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/custom_button.dart';
+import '../chat/chat_screen.dart';
 
 class StudyGroupsScreen extends StatefulWidget {
   const StudyGroupsScreen({super.key});
@@ -15,9 +16,6 @@ class StudyGroupsScreen extends StatefulWidget {
 
 class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
   final TextEditingController _searchController = TextEditingController();
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _descriptionController = TextEditingController();
-  String _selectedCategory = 'AI';
 
   @override
   void initState() {
@@ -28,59 +26,52 @@ class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
   }
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Study Groups'),
-        elevation: 0,
+        title: const Text(
+          'Study Groups',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Colors.white,
+        elevation: 2,
+        actions: [
+          IconButton(
+            onPressed: () => _showCreateGroupDialog(context),
+            icon: const Icon(Icons.add),
+            tooltip: 'Create Group',
+          ),
+        ],
       ),
       body: Column(
         children: [
-          // Error handling
-          Consumer<StudyGroupProvider>(
-            builder: (context, groupProvider, child) {
-              if (groupProvider.errorMessage != null) {
-                return Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  margin: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.shade200),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.error_outline, color: Colors.red.shade700),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Error: ${groupProvider.errorMessage}',
-                          style: TextStyle(color: Colors.red.shade700),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => groupProvider.loadGroups(),
-                        icon: const Icon(Icons.refresh),
-                      ),
-                    ],
-                  ),
-                );
-              }
-              return const SizedBox.shrink();
-            },
-          ),
-
           // Search bar
-          Padding(
+          Container(
             padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
             child: Row(
               children: [
                 Expanded(
                   child: CustomTextField(
                     controller: _searchController,
-                    label: 'Search groups',
-                    hint: 'Search by name or category',
+                    label: 'Search',
+                    hintText: 'Search study groups...',
                     prefixIcon: const Icon(Icons.search),
                     onChanged: (value) {
                       if (value.isEmpty) {
@@ -92,14 +83,16 @@ class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Consumer<StudyGroupProvider>(
-                  builder: (context, groupProvider, child) {
-                    return IconButton(
-                      onPressed: () => groupProvider.loadGroups(),
-                      icon: groupProvider.isLoading
-                          ? const CircularProgressIndicator()
-                          : const Icon(Icons.refresh),
-                    );
+                CustomButton(
+                  text: 'Search',
+                  type: ButtonType.primary,
+                  onPressed: () {
+                    final query = _searchController.text.trim();
+                    if (query.isNotEmpty) {
+                      context.read<StudyGroupProvider>().searchGroups(query);
+                    } else {
+                      context.read<StudyGroupProvider>().loadGroups();
+                    }
                   },
                 ),
               ],
@@ -111,27 +104,28 @@ class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
             child: Consumer<StudyGroupProvider>(
               builder: (context, groupProvider, child) {
                 if (groupProvider.isLoading && groupProvider.groups.isEmpty) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(
+                    child: CircularProgressIndicator(),
+                  );
                 }
 
-                if (groupProvider.groups.isEmpty) {
-                  return const Center(
+                if (groupProvider.errorMessage != null) {
+                  return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.group, size: 64, color: Colors.grey),
-                        SizedBox(height: 16),
-                        Text(
-                          'No study groups found',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.grey,
-                          ),
+                        Icon(
+                          Icons.error_outline,
+                          size: 48,
+                          color: Colors.red[300],
                         ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Create the first study group!',
-                          style: TextStyle(color: Colors.grey),
+                        const SizedBox(height: 16),
+                        Text('Error: ${groupProvider.errorMessage}'),
+                        const SizedBox(height: 16),
+                        CustomButton(
+                          text: 'Retry',
+                          type: ButtonType.primary,
+                          onPressed: () => groupProvider.loadGroups(),
                         ),
                       ],
                     ),
@@ -140,11 +134,14 @@ class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
 
                 return RefreshIndicator(
                   onRefresh: () => groupProvider.loadGroups(),
-                  child: ListView.builder(
+                  child: groupProvider.groups.isEmpty
+                      ? _buildEmptyState(context)
+                      : ListView.builder(
+                    padding: const EdgeInsets.all(16),
                     itemCount: groupProvider.groups.length,
                     itemBuilder: (context, index) {
                       final group = groupProvider.groups[index];
-                      return _buildGroupCard(group, groupProvider);
+                      return _buildGroupCard(context, group, groupProvider);
                     },
                   ),
                 );
@@ -153,230 +150,283 @@ class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showCreateGroupDialog(),
-        child: const Icon(Icons.add),
-      ),
     );
   }
 
-  Widget _buildGroupCard(group, StudyGroupProvider groupProvider) {
-    final currentUser = context.read<AuthProvider>().currentUser;
-    final currentUserId = currentUser?.id.toString() ?? '';
-    final isMember = groupProvider.isUserInGroup(group.id!, currentUserId);
-
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: InkWell(
-        onTap: isMember ? () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ChatScreen(group: group),
+  Widget _buildEmptyState(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.group,
+            size: 64,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No study groups found',
+            style: TextStyle(
+              fontSize: 18,
+              color: Colors.grey[600],
             ),
-          );
-        } : null,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _getCategoryColor(group.category),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      group.category.toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '${group.memberCount} members',
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                group.name,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                group.description,
-                style: TextStyle(
-                  color: Colors.grey.shade700,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Text(
-                    _formatDate(group.createdAt),
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: 12,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (currentUser != null)
-                    ElevatedButton(
-                      onPressed: () async {
-                        if (isMember) {
-                          await groupProvider.leaveGroup(group.id!, currentUserId);
-                        } else {
-                          await groupProvider.joinGroup(group.id!, currentUserId);
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isMember ? Colors.red : null,
-                        foregroundColor: isMember ? Colors.white : null,
-                      ),
-                      child: Text(isMember ? 'Leave' : 'Join'),
-                    ),
-                ],
-              ),
-            ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Color _getCategoryColor(String category) {
-    switch (category.toLowerCase()) {
-      case 'ai':
-        return Colors.purple;
-      case 'mobile development':
-        return Colors.blue;
-      case 'operating systems':
-        return Colors.green;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  void _showCreateGroupDialog() {
-    final currentUser = context.read<AuthProvider>().currentUser;
-
-    if (currentUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please login to create groups')),
-      );
-      return;
-    }
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Create Study Group'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CustomTextField(
-                controller: _nameController,
-                label: 'Group Name',
-                hint: 'Enter group name',
-              ),
-              const SizedBox(height: 16),
-              CustomTextField(
-                controller: _descriptionController,
-                label: 'Description',
-                hint: 'Describe your study group',
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: _selectedCategory,
-                decoration: const InputDecoration(
-                  labelText: 'Category',
-                  border: OutlineInputBorder(),
-                ),
-                items: ['AI', 'Mobile Development', 'Operating Systems']
-                    .map((category) => DropdownMenuItem(
-                  value: category,
-                  child: Text(category),
-                ))
-                    .toList(),
-                onChanged: (value) => setState(() => _selectedCategory = value!),
-              ),
-            ],
+          const SizedBox(height: 8),
+          Text(
+            'Create the first group to get started!',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[500],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          Consumer<StudyGroupProvider>(
-            builder: (context, groupProvider, child) {
-              return ElevatedButton(
-                onPressed: groupProvider.isLoading ? null : () async {
-                  if (_nameController.text.trim().isEmpty ||
-                      _descriptionController.text.trim().isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please fill all fields')),
-                    );
-                    return;
-                  }
-
-                  await groupProvider.createGroup(
-                    _nameController.text.trim(),
-                    _descriptionController.text.trim(),
-                    _selectedCategory,
-                  );
-
-                  _nameController.clear();
-                  _descriptionController.clear();
-                  Navigator.of(context).pop();
-                },
-                child: groupProvider.isLoading
-                    ? const CircularProgressIndicator()
-                    : const Text('Create'),
-              );
-            },
+          const SizedBox(height: 24),
+          CustomButton(
+            text: 'Create Group',
+            type: ButtonType.primary,
+            onPressed: () => _showCreateGroupDialog(context),
           ),
         ],
       ),
     );
   }
 
-  String _formatDate(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
+  Widget _buildGroupCard(BuildContext context, StudyGroup group, StudyGroupProvider groupProvider) {
+    final currentUser = context.watch<AuthProvider>().currentUser;
+    if (currentUser == null) return const SizedBox.shrink();
 
-    if (difference.inDays < 1) {
-      return 'Today';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays}d ago';
-    } else {
-      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+    final isMember = groupProvider.isUserInGroup(group.id!, currentUser.id.toString());
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary,
+                    borderRadius: BorderRadius.circular(25),
+                  ),
+                  child: group.imageUrl != null
+                      ? ClipRRect(
+                    borderRadius: BorderRadius.circular(25),
+                    child: Image.network(
+                      group.imageUrl!,
+                      width: 50,
+                      height: 50,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(
+                          Icons.group,
+                          color: Colors.white,
+                          size: 24,
+                        );
+                      },
+                    ),
+                  )
+                      : const Icon(
+                    Icons.group,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        group.name,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${group.memberCount} members',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            Text(
+              group.description,
+              style: const TextStyle(fontSize: 14),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+
+            const SizedBox(height: 16),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    'Subject: ${group.subject}',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                if (isMember) ...[
+                  CustomButton(
+                    text: 'Open Chat',
+                    type: ButtonType.primary,
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ChatScreen(group: group),
+                        ),
+                      );
+                    },
+                  ),
+                ] else ...[
+                  CustomButton(
+                    text: 'Join Group',
+                    type: ButtonType.secondary,
+                    onPressed: () => _joinGroup(group, currentUser.id.toString()),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _joinGroup(StudyGroup group, String currentUserId) async {
+    try {
+      await context.read<StudyGroupProvider>().joinGroup(group.id!, currentUserId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Successfully joined ${group.name}!'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to join group: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    _nameController.dispose();
-    _descriptionController.dispose();
-    super.dispose();
+  void _showCreateGroupDialog(BuildContext context) {
+    final nameController = TextEditingController();
+    final descriptionController = TextEditingController();
+    String selectedSubject = 'AI';
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Create New Study Group'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CustomTextField(
+                  controller: nameController,
+                  label: 'Group Name',
+                  hintText: 'Enter group name',
+                ),
+                const SizedBox(height: 16),
+                CustomTextField(
+                  controller: descriptionController,
+                  label: 'Description',
+                  hintText: 'Describe your study group',
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedSubject,
+                  decoration: const InputDecoration(
+                    labelText: 'Subject',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'AI', child: Text('Artificial Intelligence')),
+                    DropdownMenuItem(value: 'Mobile Dev', child: Text('Mobile Development')),
+                    DropdownMenuItem(value: 'OS', child: Text('Operating Systems')),
+                    DropdownMenuItem(value: 'General', child: Text('General')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        selectedSubject = value;
+                      });
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                nameController.dispose();
+                descriptionController.dispose();
+                Navigator.pop(context);
+              },
+              child: const Text('Cancel'),
+            ),
+            Consumer<AuthProvider>(
+              builder: (context, authProvider, child) {
+                final currentUser = authProvider.currentUser;
+
+                return CustomButton(
+                  text: 'Create',
+                  type: ButtonType.primary,
+                  onPressed: currentUser != null
+                      ? () async {
+                    if (nameController.text.trim().isNotEmpty &&
+                        descriptionController.text.trim().isNotEmpty) {
+                      await context.read<StudyGroupProvider>().createGroup(
+                        nameController.text.trim(),
+                        descriptionController.text.trim(),
+                        currentUser.id.toString(),
+                      );
+
+                      nameController.dispose();
+                      descriptionController.dispose();
+                      Navigator.pop(context);
+                    }
+                  }
+                      : null,
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

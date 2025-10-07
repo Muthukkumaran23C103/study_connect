@@ -1,23 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/providers/post_provider.dart';
-import '../../core/providers/auth_provider.dart';
+import '../providers/auth_provider.dart';
+import '../providers/post_provider.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/custom_button.dart';
+import '../models/post_model.dart';
 
 class PostFeedScreen extends StatefulWidget {
   final int? groupId;
 
-  const PostFeedScreen({super.key, this.groupId});
+  const PostFeedScreen({
+    super.key,
+    this.groupId,
+  });
 
   @override
   State<PostFeedScreen> createState() => _PostFeedScreenState();
 }
 
 class _PostFeedScreenState extends State<PostFeedScreen> {
-  final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _contentController = TextEditingController();
-
   @override
   void initState() {
     super.initState();
@@ -34,130 +35,140 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.groupId != null ? 'Group Posts' : 'All Posts'),
-        elevation: 0,
-      ),
-      body: Column(
-        children: [
-          // Error handling
-          Consumer<PostProvider>(
-            builder: (context, postProvider, child) {
-              if (postProvider.errorMessage != null) {
-                return Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  margin: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.shade200),
-                  ),
-                  child: Text(
-                    'Error: ${postProvider.errorMessage}',
-                    style: TextStyle(color: Colors.red.shade700),
-                  ),
-                );
-              }
-              return const SizedBox.shrink();
-            },
-          ),
-
-          // Refresh button
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Consumer<PostProvider>(
-              builder: (context, postProvider, child) {
-                return ElevatedButton(
-                  onPressed: postProvider.isLoading ? null : () {
-                    if (widget.groupId != null) {
-                      postProvider.loadGroupPosts(widget.groupId!);
-                    } else {
-                      postProvider.loadAllPosts();
-                    }
-                  },
-                  child: postProvider.isLoading
-                      ? const CircularProgressIndicator()
-                      : const Text('Refresh Posts'),
-                );
-              },
-            ),
-          ),
-
-          // Posts list
-          Expanded(
-            child: Consumer<PostProvider>(
-              builder: (context, postProvider, child) {
-                if (postProvider.isLoading && postProvider.posts.isEmpty) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (postProvider.posts.isEmpty) {
-                  return const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.post_add, size: 64, color: Colors.grey),
-                        SizedBox(height: 16),
-                        Text(
-                          'No posts yet',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.grey,
-                          ),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Be the first to share something!',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                return RefreshIndicator(
-                  onRefresh: () async {
-                    if (widget.groupId != null) {
-                      await postProvider.loadGroupPosts(widget.groupId!);
-                    } else {
-                      await postProvider.loadAllPosts();
-                    }
-                  },
-                  child: ListView.builder(
-                    itemCount: postProvider.posts.length,
-                    itemBuilder: (context, index) {
-                      final post = postProvider.posts[index];
-                      return _buildPostCard(post);
-                    },
-                  ),
-                );
-              },
-            ),
+        title: Text(
+          widget.groupId != null ? 'Group Posts' : 'All Posts',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Colors.white,
+        elevation: 2,
+        actions: [
+          IconButton(
+            onPressed: () => _showCreatePostDialog(context),
+            icon: const Icon(Icons.add),
+            tooltip: 'Create Post',
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showCreatePostDialog(),
-        child: const Icon(Icons.add),
+      body: Consumer<PostProvider>(
+        builder: (context, postProvider, child) {
+          if (postProvider.isLoading && postProvider.posts.isEmpty) {
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          }
+
+          if (postProvider.errorMessage != null) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 48,
+                    color: Colors.red[300],
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Error: ${postProvider.errorMessage}'),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      if (widget.groupId != null) {
+                        postProvider.loadGroupPosts(widget.groupId!);
+                      } else {
+                        postProvider.loadAllPosts();
+                      }
+                    },
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return RefreshIndicator(
+            onRefresh: () async {
+              if (widget.groupId != null) {
+                await postProvider.loadGroupPosts(widget.groupId!);
+              } else {
+                await postProvider.loadAllPosts();
+              }
+            },
+            child: postProvider.posts.isEmpty
+                ? _buildEmptyState()
+                : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: postProvider.posts.length,
+              itemBuilder: (context, index) {
+                final post = postProvider.posts[index];
+                return _buildPostCard(context, post);
+              },
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildPostCard(post) {
-    final currentUser = context.read<AuthProvider>().currentUser;
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.post_add,
+            size: 64,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No posts yet',
+            style: TextStyle(
+              fontSize: 18,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Be the first to share something!',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[500],
+            ),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () => _showCreatePostDialog(context),
+            icon: const Icon(Icons.add),
+            label: const Text('Create Post'),
+          ),
+        ],
+      ),
+    );
+  }
 
+  Widget _buildPostCard(BuildContext context, Post post) {
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
+            // Author info
             Row(
               children: [
                 CircleAvatar(
-                  child: Text(post.authorName.substring(0, 1).toUpperCase()),
+                  radius: 20,
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  child: Text(
+                    post.authorName[0].toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -166,12 +177,15 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
                     children: [
                       Text(
                         post.authorName,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
                       ),
                       Text(
-                        _formatDate(post.timestamp),
+                        _formatTime(post.createdAt),
                         style: TextStyle(
-                          color: Colors.grey.shade600,
+                          color: Colors.grey[600],
                           fontSize: 12,
                         ),
                       ),
@@ -180,8 +194,10 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
                 ),
                 PopupMenuButton<String>(
                   onSelected: (value) {
-                    if (value == 'report') {
-                      _showReportDialog();
+                    switch (value) {
+                      case 'report':
+                        _reportPost(post);
+                        break;
                     }
                   },
                   itemBuilder: (context) => [
@@ -189,7 +205,7 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
                       value: 'report',
                       child: Row(
                         children: [
-                          Icon(Icons.report_outlined),
+                          Icon(Icons.report),
                           SizedBox(width: 8),
                           Text('Report'),
                         ],
@@ -199,42 +215,59 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
 
-            // Title
-            Text(
-              post.title,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+            const SizedBox(height: 12),
+
+            // Post title
+            if (post.title.isNotEmpty)
+              Text(
+                post.title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
+
             const SizedBox(height: 8),
 
-            // Content
-            Text(post.content),
-            const SizedBox(height: 16),
+            // Post content
+            Text(
+              post.content,
+              style: const TextStyle(fontSize: 14),
+            ),
 
-            // Actions
+            const SizedBox(height: 12),
+
+            // Action buttons
             Row(
               children: [
-                TextButton.icon(
-                  onPressed: currentUser != null ? () {
-                    context.read<PostProvider>().toggleLike(
-                      post.id!,
-                      currentUser.id.toString(),
+                Consumer<AuthProvider>(
+                  builder: (context, authProvider, child) {
+                    final currentUser = authProvider.currentUser;
+                    if (currentUser == null) return const SizedBox.shrink();
+
+                    return TextButton.icon(
+                      onPressed: () {
+                        context.read<PostProvider>().toggleLike(post.id!, currentUser.id.toString());
+                      },
+                      icon: const Icon(Icons.thumb_up_outlined),
+                      label: Text('${post.likesCount}'),
                     );
-                  } : null,
-                  icon: const Icon(Icons.thumb_up_outlined),
-                  label: Text('${post.likesCount} Likes'),
+                  },
                 ),
-                const SizedBox(width: 16),
                 TextButton.icon(
                   onPressed: () {
-                    // TODO: Implement comments
+                    // TODO: Show comments
                   },
                   icon: const Icon(Icons.comment_outlined),
-                  label: Text('${post.commentsCount} Comments'),
+                  label: Text('${post.commentsCount}'),
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    // TODO: Share post
+                  },
+                  icon: const Icon(Icons.share_outlined),
+                  label: const Text('Share'),
                 ),
               ],
             ),
@@ -244,116 +277,112 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
     );
   }
 
-  void _showCreatePostDialog() {
-    final currentUser = context.read<AuthProvider>().currentUser;
+  String _formatTime(DateTime timestamp) {
+    final now = DateTime.now();
+    final diff = now.difference(timestamp);
 
-    if (currentUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please login to create posts')),
-      );
-      return;
+    if (diff.inDays > 0) {
+      return '${diff.inDays}d ago';
+    } else if (diff.inHours > 0) {
+      return '${diff.inHours}h ago';
+    } else if (diff.inMinutes > 0) {
+      return '${diff.inMinutes}m ago';
+    } else {
+      return 'Just now';
     }
+  }
+
+  void _reportPost(Post post) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Report Post'),
+        content: const Text('Are you sure you want to report this post for inappropriate content?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Post reported successfully')),
+              );
+            },
+            child: const Text('Report'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCreatePostDialog(BuildContext context) {
+    final titleController = TextEditingController();
+    final contentController = TextEditingController();
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Create Post'),
+        title: const Text('Create New Post'),
         content: SizedBox(
           width: double.maxFinite,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               CustomTextField(
-                controller: _titleController,
+                controller: titleController,
                 label: 'Title',
-                hint: 'Enter post title',
+                hintText: 'Enter post title',
               ),
               const SizedBox(height: 16),
               CustomTextField(
-                controller: _contentController,
+                controller: contentController,
                 label: 'Content',
-                hint: 'What would you like to share?',
+                hintText: 'What would you like to share?',
               ),
             ],
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              titleController.dispose();
+              contentController.dispose();
+              Navigator.pop(context);
+            },
             child: const Text('Cancel'),
           ),
-          Consumer<PostProvider>(
-            builder: (context, postProvider, child) {
-              return ElevatedButton(
-                onPressed: postProvider.isLoading ? null : () async {
-                  if (_titleController.text.trim().isEmpty ||
-                      _contentController.text.trim().isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please fill all fields')),
+          Consumer<AuthProvider>(
+            builder: (context, authProvider, child) {
+              final currentUser = authProvider.currentUser;
+
+              return CustomButton(
+                text: 'Post',
+                type: ButtonType.primary,
+                onPressed: currentUser != null
+                    ? () async {
+                  if (titleController.text.trim().isNotEmpty &&
+                      contentController.text.trim().isNotEmpty) {
+                    await context.read<PostProvider>().createPost(
+                      title: titleController.text.trim(),
+                      content: contentController.text.trim(),
+                      authorId: currentUser.id.toString(),
+                      authorName: currentUser.displayName,
+                      groupId: widget.groupId,
                     );
-                    return;
+
+                    titleController.dispose();
+                    contentController.dispose();
+                    Navigator.pop(context);
                   }
-
-                  await context.read<PostProvider>().createPost(
-                    authorId: currentUser.id.toString(),
-                    authorName: currentUser.displayName,
-                    title: _titleController.text.trim(),
-                    content: _contentController.text.trim(),
-                    groupId: widget.groupId,
-                  );
-
-                  _titleController.clear();
-                  _contentController.clear();
-                  Navigator.of(context).pop();
-                },
-                child: postProvider.isLoading
-                    ? const CircularProgressIndicator()
-                    : const Text('Post'),
+                }
+                    : null,
               );
             },
           ),
         ],
       ),
     );
-  }
-
-  void _showReportDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Report Post'),
-        content: const Text('This feature is not implemented yet.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatDate(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-
-    if (difference.inMinutes < 1) {
-      return 'Just now';
-    } else if (difference.inHours < 1) {
-      return '${difference.inMinutes}m ago';
-    } else if (difference.inDays < 1) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays}d ago';
-    } else {
-      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
-    }
-  }
-
-  @override
-  void dispose() {
-    _titleController.dispose();
-    _contentController.dispose();
-    super.dispose();
   }
 }

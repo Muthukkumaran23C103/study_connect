@@ -15,14 +15,16 @@ class StudyGroupProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   Future<void> loadGroups() async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
-
     try {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+
       _groups = await _databaseService.getStudyGroups();
+      notifyListeners();
     } catch (e) {
       _errorMessage = e.toString();
+      notifyListeners();
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -30,14 +32,16 @@ class StudyGroupProvider extends ChangeNotifier {
   }
 
   Future<void> loadUserGroups(String userId) async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
-
     try {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+
       _userGroups = await _databaseService.getUserGroups(userId);
+      notifyListeners();
     } catch (e) {
       _errorMessage = e.toString();
+      notifyListeners();
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -71,20 +75,23 @@ class StudyGroupProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> createGroup(String name, String description, String category) async {
+  Future<void> createGroup(String name, String description, String createdBy) async {
     try {
       final group = StudyGroup(
-        id: DateTime.now().millisecondsSinceEpoch,
         name: name,
         description: description,
-        category: category,
+        createdBy: createdBy,
         createdAt: DateTime.now(),
-        memberCount: 0,
+        memberCount: 1,
+        imageUrl: null,
+        subject: 'General',
       );
 
       final groupId = await _databaseService.insertStudyGroup(group);
+
       final newGroup = group.copyWith(id: groupId);
       _groups.insert(0, newGroup);
+      _userGroups.add(newGroup);
       notifyListeners();
     } catch (e) {
       _errorMessage = e.toString();
@@ -93,13 +100,16 @@ class StudyGroupProvider extends ChangeNotifier {
   }
 
   Future<void> searchGroups(String query) async {
-    _isLoading = true;
-    notifyListeners();
-
     try {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+
       _groups = await _databaseService.searchStudyGroups(query);
+      notifyListeners();
     } catch (e) {
       _errorMessage = e.toString();
+      notifyListeners();
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -114,11 +124,7 @@ class StudyGroupProvider extends ChangeNotifier {
     try {
       return _groups.firstWhere((group) => group.id == groupId);
     } catch (e) {
-      try {
-        return _userGroups.firstWhere((group) => group.id == groupId);
-      } catch (e) {
-        return null;
-      }
+      return _userGroups.firstWhere((group) => group.id == groupId);
     }
   }
 }

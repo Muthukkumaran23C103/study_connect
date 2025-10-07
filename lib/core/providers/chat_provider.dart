@@ -12,15 +12,17 @@ class ChatProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  Future<void> loadMessages(int groupId) async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
-
+  Future<void> loadMessagesForGroup(int groupId) async {
     try {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+
       _messages = await _databaseService.getMessagesForGroup(groupId);
+      notifyListeners();
     } catch (e) {
       _errorMessage = e.toString();
+      notifyListeners();
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -39,22 +41,19 @@ class ChatProvider extends ChangeNotifier {
 
   Future<void> sendMessage({
     required int groupId,
+    required String content,
     required String senderId,
     required String senderName,
-    required String content,
-    String? attachmentPath,
-    String? attachmentType,
+    String? attachmentUrl,
   }) async {
     try {
       final message = Message(
-        id: DateTime.now().millisecondsSinceEpoch,
         groupId: groupId,
+        content: content,
         senderId: senderId,
         senderName: senderName,
-        content: content,
         timestamp: DateTime.now(),
-        attachmentPath: attachmentPath,
-        attachmentType: attachmentType,
+        attachmentUrl: attachmentUrl,
       );
 
       final messageId = await _databaseService.insertMessage(message);
@@ -66,5 +65,10 @@ class ChatProvider extends ChangeNotifier {
       _errorMessage = e.toString();
       notifyListeners();
     }
+  }
+
+  void clearMessages() {
+    _messages.clear();
+    notifyListeners();
   }
 }
