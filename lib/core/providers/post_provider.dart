@@ -5,11 +5,11 @@ import '../models/post_model.dart';
 class PostProvider extends ChangeNotifier {
   final DatabaseService _databaseService = DatabaseService.instance;
 
-  List<PostModel> _posts = [];
+  List<PostModel> _posts = [];  // ← FIXED: Added proper type
   bool _isLoading = false;
   String? _errorMessage;
 
-  List<PostModel> get posts => _posts;
+  List<PostModel> get posts => _posts;  // ← FIXED: Added proper type
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 

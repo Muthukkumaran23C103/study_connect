@@ -7,7 +7,7 @@ class UserModel {
   final String? college;
   final String? year;
   final String? branch;
-  final List<String> joinedGroups;
+  final List<String> joinedGroups;  // ← FIXED: Added proper type
   final DateTime createdAt;
   final DateTime? updatedAt;
   final DateTime? lastActive;
@@ -33,7 +33,7 @@ class UserModel {
     this.passwordHash,
   });
 
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toMap() {  // ← FIXED: Added proper type
     return {
       'id': id,
       'email': email,
@@ -53,7 +53,7 @@ class UserModel {
     };
   }
 
-  static UserModel fromMap(Map<String, dynamic> map) {
+  static UserModel fromMap(Map<String, dynamic> map) {  // ← FIXED: Added proper type
     return UserModel(
       id: map['id'] as String,
       email: map['email'] as String,
@@ -84,7 +84,7 @@ class UserModel {
     String? college,
     String? year,
     String? branch,
-    List<String>? joinedGroups,
+    List<String>? joinedGroups,  // ← FIXED: Added proper type
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? lastActive,

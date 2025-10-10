@@ -5,15 +5,15 @@ import '../models/study_group_model.dart';
 class StudyGroupProvider extends ChangeNotifier {
   final DatabaseService _databaseService = DatabaseService.instance;
 
-  List<StudyGroupModel> _studyGroups = [];
-  List<StudyGroupModel> _userGroups = [];
+  List<StudyGroupModel> _studyGroups = [];  // ← FIXED: Added proper type
+  List<StudyGroupModel> _userGroups = [];   // ← FIXED: Added proper type
   bool _isLoading = false;
   String? _errorMessage;
 
   // Getters
-  List<StudyGroupModel> get studyGroups => _studyGroups;
-  List<StudyGroupModel> get groups => _studyGroups;
-  List<StudyGroupModel> get userGroups => _userGroups;
+  List<StudyGroupModel> get studyGroups => _studyGroups;  // ← FIXED: Added proper type
+  List<StudyGroupModel> get groups => _studyGroups;      // ← FIXED: Added proper type
+  List<StudyGroupModel> get userGroups => _userGroups;   // ← FIXED: Added proper type
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 

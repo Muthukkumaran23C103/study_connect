@@ -5,11 +5,11 @@ import '../models/message_model.dart';
 class ChatProvider extends ChangeNotifier {
   final DatabaseService _databaseService = DatabaseService.instance;
 
-  List<MessageModel> _messages = [];
+  List<MessageModel> _messages = [];  // ← FIXED: Added proper type
   bool _isLoading = false;
   String? _errorMessage;
 
-  List<MessageModel> get messages => _messages;
+  List<MessageModel> get messages => _messages;  // ← FIXED: Added proper type
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 

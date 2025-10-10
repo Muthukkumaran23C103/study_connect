@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/models/study_group_model.dart';
 import '../../core/models/message_model.dart';
+import '../../core/models/user_model.dart';  // ← ADD THIS IMPORT
 import '../../core/providers/auth_provider.dart';
 import '../../core/providers/chat_provider.dart';
 import '../../widgets/chat/message_bubble.dart';
