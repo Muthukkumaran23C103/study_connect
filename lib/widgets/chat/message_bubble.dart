@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 import '../../core/models/message_model.dart';
 
 class MessageBubble extends StatelessWidget {
-  final Message message;
+  final MessageModel message;
   final bool isOwn;
 
   const MessageBubble({
@@ -99,7 +99,7 @@ class MessageBubble extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           Text(
-                            _formatTime(message.timestamp),
+                            _formatTime(message.createdAt),
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: isOwn
                                   ? Theme.of(context).colorScheme.onPrimary.withOpacity(0.7)

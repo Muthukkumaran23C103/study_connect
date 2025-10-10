@@ -5,6 +5,7 @@ import '../../core/providers/post_provider.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/custom_button.dart';
 import '../../core/models/post_model.dart';
+import '../../core/models/user_model.dart';
 
 class PostFeedScreen extends StatefulWidget {
   final int? groupId;
@@ -23,7 +24,7 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
       if (widget.groupId != null) {
         context.read<PostProvider>().loadGroupPosts(widget.groupId!);
       } else {
-        context.read<PostProvider>().loadAllPosts();
+        context.read<PostProvider>().loadPosts();
       }
     });
   }
@@ -60,7 +61,7 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
                       if (widget.groupId != null) {
                         postProvider.loadGroupPosts(widget.groupId!);
                       } else {
-                        postProvider.loadAllPosts();
+                        postProvider.loadPosts();
                       }
                     },
                     child: const Text('Retry'),
@@ -75,7 +76,7 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
               if (widget.groupId != null) {
                 await postProvider.loadGroupPosts(widget.groupId!);
               } else {
-                await postProvider.loadAllPosts();
+                await postProvider.loadPosts();
               }
             },
             child: postProvider.posts.isEmpty
@@ -93,7 +94,7 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
     );
   }
 
-  Widget _buildPostCard(BuildContext context, Post post) {
+  Widget _buildPostCard(BuildContext context, PostModel post) {
     return Card(
       margin: const EdgeInsets.all(8),
       child: Padding(
@@ -125,7 +126,7 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
                     ],
                   ),
                 ),
-                PopupMenuButton(
+                PopupMenuButton<String>(
                   itemBuilder: (context) => [
                     const PopupMenuItem(
                       value: 'report',
@@ -147,14 +148,6 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
               ],
             ),
             const SizedBox(height: 12),
-            Text(
-              post.title,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
             Text(post.content),
             const SizedBox(height: 16),
             Row(
@@ -165,12 +158,12 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
                     if (currentUser == null) return const SizedBox();
 
                     return IconButton(
-                      icon: Icon(
+                      icon: const Icon(
                         Icons.favorite,
                         color: Colors.red,
                       ),
                       onPressed: () {
-                        context.read<PostProvider>().toggleLike(post.id!, currentUser.id.toString());
+                        context.read<PostProvider>().toggleLike(post.id!, currentUser.id);
                       },
                     );
                   },
@@ -204,7 +197,7 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
     }
   }
 
-  void _reportPost(Post post) {
+  void _reportPost(PostModel post) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -230,7 +223,6 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
   }
 
   void _showCreatePostDialog(BuildContext context) {
-    final titleController = TextEditingController();
     final contentController = TextEditingController();
 
     showDialog(
@@ -242,13 +234,7 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               CustomTextField(
-                controller: titleController, // ✅ CORRECT PARAMETER
-                label: 'Title',
-                hintText: 'Enter post title',
-              ),
-              const SizedBox(height: 16),
-              CustomTextField(
-                controller: contentController, // ✅ CORRECT PARAMETER
+                controller: contentController,
                 label: 'Content',
                 hintText: 'What would you like to share?',
               ),
@@ -261,18 +247,18 @@ class _PostFeedScreenState extends State<PostFeedScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
-                if (titleController.text.isNotEmpty &&
-                    contentController.text.isNotEmpty) {
+                if (contentController.text.isNotEmpty) {
                   final currentUser = context.read<AuthProvider>().currentUser;
                   if (currentUser != null) {
-                    await context.read<PostProvider>().createPost(
-                      title: titleController.text, // ✅ REQUIRED PARAMETER
-                      content: contentController.text,
-                      authorId: currentUser.id.toString(),
+                    final post = PostModel(
+                      content: contentController.text.trim(),
+                      authorId: currentUser.id,
                       authorName: currentUser.displayName,
                       groupId: widget.groupId,
+                      createdAt: DateTime.now(),
                     );
-                    titleController.clear();
+
+                    await context.read<PostProvider>().createPost(post);
                     contentController.clear();
                     Navigator.of(context).pop();
                   }

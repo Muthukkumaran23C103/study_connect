@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/models/study_group_model.dart';
+import '../../core/models/message_model.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/providers/chat_provider.dart';
 import '../../widgets/chat/message_bubble.dart';
 import '../../widgets/chat/message_input.dart';
 
 class ChatScreen extends StatefulWidget {
-  final StudyGroup group;
+  final StudyGroupModel group;
 
   const ChatScreen({
     super.key,
@@ -26,7 +27,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ChatProvider>().loadMessagesForGroup(widget.group.id!);
+      context.read<ChatProvider>().loadMessages(widget.group.id!);
     });
   }
 
@@ -90,7 +91,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         Text('Error: ${chatProvider.errorMessage}'),
                         ElevatedButton(
                           onPressed: () {
-                            chatProvider.loadMessagesForGroup(widget.group.id!);
+                            chatProvider.loadMessages(widget.group.id!);
                           },
                           child: const Text('Retry'),
                         ),
@@ -113,13 +114,13 @@ class _ChatScreenState extends State<ChatScreen> {
                   itemBuilder: (context, index) {
                     final message = messages[index];
                     final currentUser = context.read<AuthProvider>().currentUser;
-                    final isOwn = message.senderId == currentUser?.id.toString();
+                    final isOwn = message.senderId == currentUser?.id;
 
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: MessageBubble(
                         message: message,
-                        isOwn: isOwn, // Fixed: Use correct parameter name
+                        isOwn: isOwn,
                       ),
                     );
                   },
@@ -127,7 +128,6 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
-
           // Message Input
           Container(
             padding: const EdgeInsets.all(16),
@@ -139,9 +139,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 }
 
                 return MessageInput(
-                  textController: _messageController, // Fixed: Use correct parameter name
+                  textController: _messageController,
                   onSendMessage: () => _sendMessage(currentUser),
-                  // Removed onSendAttachment - doesn't exist in MessageInput
                 );
               },
             ),
@@ -151,16 +150,18 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  void _sendMessage(dynamic currentUser) async {
+  void _sendMessage(UserModel currentUser) async {
     if (_messageController.text.trim().isEmpty) return;
 
-    await context.read<ChatProvider>().sendMessage(
-      content: _messageController.text,
+    final message = MessageModel(
       groupId: widget.group.id!,
-      senderId: currentUser.id.toString(),
+      senderId: currentUser.id,
       senderName: currentUser.displayName,
+      content: _messageController.text.trim(),
+      createdAt: DateTime.now(),
     );
 
+    await context.read<ChatProvider>().sendMessage(message);
     _messageController.clear();
     _scrollToBottom();
   }
