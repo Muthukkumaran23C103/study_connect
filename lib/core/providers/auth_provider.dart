@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../database/database_helper.dart';
+import '../../services/database_service.dart';
 import '../models/user_model.dart';
-import '../utils/validators.dart';
+import '../../utils/validators.dart';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 
 class AuthProvider extends ChangeNotifier {
-  final DatabaseHelper _databaseHelper = DatabaseHelper();
+  final DatabaseService _databaseService = DatabaseService.instance;
   UserModel? _currentUser;
   bool _isLoading = false;
   String? _error;
@@ -75,7 +75,7 @@ class AuthProvider extends ChangeNotifier {
       }
 
       // Check if user already exists
-      final existingUser = await _databaseHelper.getUser(email);
+      final existingUser = await _databaseService.getUserByEmail(email);
       if (existingUser != null) {
         _setError('An account with this email already exists');
         return false;
@@ -83,9 +83,11 @@ class AuthProvider extends ChangeNotifier {
 
       // Create new user
       final hashedPassword = _hashPassword(password);
+      final userId = DateTime.now().millisecondsSinceEpoch.toString();
       final newUser = UserModel(
+        id: userId,
         email: email.toLowerCase().trim(),
-        password: hashedPassword,
+        passwordHash: hashedPassword,
         displayName: displayName.trim(),
         college: college?.trim(),
         year: year,
@@ -95,20 +97,11 @@ class AuthProvider extends ChangeNotifier {
       );
 
       // Insert user to database
-      final userId = await _databaseHelper.insertUser(newUser);
-
-      if (userId > 0) {
-        // Get the created user with ID
-        _currentUser = newUser.copyWith(id: userId);
-
-        // Save to shared preferences
-        await _saveUserSession();
-
-        return true;
-      } else {
-        _setError('Failed to create account. Please try again.');
-        return false;
-      }
+      await _databaseService.insertUser(newUser);
+      _currentUser = newUser;
+      // Save to shared preferences
+      await _saveUserSession();
+      return true;
     } catch (e) {
       _setError('Registration failed: ${e.toString()}');
       return false;
@@ -139,7 +132,7 @@ class AuthProvider extends ChangeNotifier {
       }
 
       // Get user from database
-      final user = await _databaseHelper.getUser(email.toLowerCase().trim());
+      final user = await _databaseService.getUserByEmail(email.toLowerCase().trim());
       if (user == null) {
         _setError('No account found with this email');
         return false;
@@ -147,18 +140,17 @@ class AuthProvider extends ChangeNotifier {
 
       // Verify password
       final hashedPassword = _hashPassword(password);
-      if (user.password != hashedPassword) {
+      if (user.passwordHash != hashedPassword) {
         _setError('Invalid password');
         return false;
       }
 
       // Update last active
       _currentUser = user.copyWith(lastActive: DateTime.now());
-      await _databaseHelper.updateUser(_currentUser!);
+      await _databaseService.updateUser(_currentUser!);
 
       // Save to shared preferences
       await _saveUserSession();
-
       return true;
     } catch (e) {
       _setError('Login failed: ${e.toString()}');
@@ -172,15 +164,12 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     try {
       _setLoading(true);
-
       // Clear shared preferences
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('current_user_id');
-
       // Clear current user
       _currentUser = null;
       _setError(null);
-
     } catch (e) {
       _setError('Logout failed: ${e.toString()}');
     } finally {
@@ -192,7 +181,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _saveUserSession() async {
     if (_currentUser != null) {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('current_user_id', _currentUser!.id!);
+      await prefs.setString('current_user_id', _currentUser!.id);
     }
   }
 
@@ -200,10 +189,9 @@ class AuthProvider extends ChangeNotifier {
   Future<void> loadUserSession() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final userId = prefs.getInt('current_user_id');
-
+      final userId = prefs.getString('current_user_id');
       if (userId != null) {
-        _currentUser = await _databaseHelper.getUserById(userId);
+        _currentUser = await _databaseService.getUser(userId);
         notifyListeners();
       }
     } catch (e) {
@@ -246,14 +234,9 @@ class AuthProvider extends ChangeNotifier {
         avatarPath: avatarPath ?? _currentUser!.avatarPath,
       );
 
-      final result = await _databaseHelper.updateUser(updatedUser);
-      if (result > 0) {
-        _currentUser = updatedUser;
-        return true;
-      } else {
-        _setError('Failed to update profile');
-        return false;
-      }
+      await _databaseService.updateUser(updatedUser);
+      _currentUser = updatedUser;
+      return true;
     } catch (e) {
       _setError('Update failed: ${e.toString()}');
       return false;
@@ -285,23 +268,18 @@ class AuthProvider extends ChangeNotifier {
 
       // Verify current password
       final hashedCurrentPassword = _hashPassword(currentPassword);
-      if (_currentUser!.password != hashedCurrentPassword) {
+      if (_currentUser!.passwordHash != hashedCurrentPassword) {
         _setError('Current password is incorrect');
         return false;
       }
 
       // Update password
       final hashedNewPassword = _hashPassword(newPassword);
-      final updatedUser = _currentUser!.copyWith(password: hashedNewPassword);
+      final updatedUser = _currentUser!.copyWith(passwordHash: hashedNewPassword);
 
-      final result = await _databaseHelper.updateUser(updatedUser);
-      if (result > 0) {
-        _currentUser = updatedUser;
-        return true;
-      } else {
-        _setError('Failed to change password');
-        return false;
-      }
+      await _databaseService.updateUser(updatedUser);
+      _currentUser = updatedUser;
+      return true;
     } catch (e) {
       _setError('Password change failed: ${e.toString()}');
       return false;
@@ -312,7 +290,7 @@ class AuthProvider extends ChangeNotifier {
 
   @override
   void dispose() {
-    _databaseHelper.closeDatabase();
+    _databaseService.close();
     super.dispose();
   }
 }

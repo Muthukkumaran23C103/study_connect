@@ -4,23 +4,27 @@ import '../models/study_group_model.dart';
 
 class StudyGroupProvider extends ChangeNotifier {
   final DatabaseService _databaseService = DatabaseService.instance;
-  List<StudyGroup> _groups = [];
-  List<StudyGroup> _userGroups = [];
+
+  List<StudyGroupModel> _studyGroups = [];
+  List<StudyGroupModel> _userGroups = [];
   bool _isLoading = false;
   String? _errorMessage;
 
-  List<StudyGroup> get groups => _groups;
-  List<StudyGroup> get userGroups => _userGroups;
+  // Getters
+  List<StudyGroupModel> get studyGroups => _studyGroups;
+  List<StudyGroupModel> get groups => _studyGroups;
+  List<StudyGroupModel> get userGroups => _userGroups;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  Future<void> loadGroups() async {
+  // Load all study groups
+  Future<void> loadStudyGroups() async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      _groups = await _databaseService.getStudyGroups();
+      _studyGroups = await _databaseService.getStudyGroups();
     } catch (e) {
       _errorMessage = 'Failed to load groups: $e';
     } finally {
@@ -29,6 +33,7 @@ class StudyGroupProvider extends ChangeNotifier {
     }
   }
 
+  // Load study groups for a specific user
   Future<void> loadUserGroups(String userId) async {
     _isLoading = true;
     _errorMessage = null;
@@ -44,11 +49,11 @@ class StudyGroupProvider extends ChangeNotifier {
     }
   }
 
+  // Join a study group
   Future<void> joinGroup(int groupId, String userId) async {
     try {
-      // FIXED: Removed .toString() since groupId is already int
       await _databaseService.joinGroup(groupId, userId);
-      final group = _groups.firstWhere((g) => g.id == groupId);
+      final group = _studyGroups.firstWhere((g) => g.id == groupId);
       if (!_userGroups.any((g) => g.id == groupId)) {
         _userGroups.add(group);
         notifyListeners();
@@ -59,9 +64,9 @@ class StudyGroupProvider extends ChangeNotifier {
     }
   }
 
+  // Leave a study group
   Future<void> leaveGroup(int groupId, String userId) async {
     try {
-      // FIXED: Removed .toString() since groupId is already int
       await _databaseService.leaveGroup(groupId, userId);
       _userGroups.removeWhere((g) => g.id == groupId);
       notifyListeners();
@@ -71,21 +76,21 @@ class StudyGroupProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> createGroup(String name, String description, String category) async {
+  // Create a new study group
+  Future<void> createGroup(String name, String description, String category, String createdBy) async {
     try {
-      // FIXED: Added createdAt parameter
-      final group = StudyGroup(
+      final group = StudyGroupModel(
         name: name,
         description: description,
-        category: category,
-        createdBy: 1, // Replace with actual user ID as int
+        createdBy: createdBy,
+        tags: category,
         memberCount: 1,
-        createdAt: DateTime.now(), // ADDED THIS LINE
+        createdAt: DateTime.now(),
       );
 
       final groupId = await _databaseService.insertStudyGroup(group);
       final newGroup = group.copyWith(id: groupId);
-      _groups.add(newGroup);
+      _studyGroups.add(newGroup);
       _userGroups.add(newGroup);
       notifyListeners();
     } catch (e) {
@@ -94,13 +99,14 @@ class StudyGroupProvider extends ChangeNotifier {
     }
   }
 
+  // Search study groups
   Future<void> searchGroups(String query) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      _groups = await _databaseService.searchStudyGroups(query);
+      _studyGroups = await _databaseService.searchStudyGroups(query);
     } catch (e) {
       _errorMessage = 'Failed to search groups: $e';
     } finally {
@@ -109,13 +115,15 @@ class StudyGroupProvider extends ChangeNotifier {
     }
   }
 
+  // Check if user is in group
   bool isUserInGroup(int groupId, String userId) {
     return _userGroups.any((group) => group.id == groupId);
   }
 
-  StudyGroup? getGroupById(int groupId) {
+  // Get group by ID
+  StudyGroupModel? getGroupById(int groupId) {
     try {
-      return _groups.firstWhere((group) => group.id == groupId);
+      return _studyGroups.firstWhere((group) => group.id == groupId);
     } catch (e) {
       try {
         return _userGroups.firstWhere((group) => group.id == groupId);
