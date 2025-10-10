@@ -1,78 +1,96 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import '../../services/database_service.dart';
 import '../models/post_model.dart';
 
 class PostProvider extends ChangeNotifier {
   final DatabaseService _databaseService = DatabaseService.instance;
-  List<Post> _posts = [];
+
+  List<PostModel> _posts = [];
   bool _isLoading = false;
   String? _errorMessage;
 
-  List<Post> get posts => _posts;
+  List<PostModel> get posts => _posts;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  Future<void> loadAllPosts() async {
-    _setLoading(true);
+  Future<void> loadPosts() async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
     try {
       _posts = await _databaseService.getAllPosts();
-      _errorMessage = null;
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = 'Failed to load posts: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-    _setLoading(false);
   }
 
   Future<void> loadGroupPosts(int groupId) async {
-    _setLoading(true);
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
     try {
       _posts = await _databaseService.getGroupPosts(groupId);
-      _errorMessage = null;
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = 'Failed to load group posts: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-    _setLoading(false);
   }
 
-  Future<void> createPost({
-    required String title,
-    required String content,
-    required String authorId,
-    required String authorName,
-    int? groupId,
-    List<String>? attachmentUrls,
-  }) async {
+  Future<void> loadUserPosts(String userId) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
     try {
-      final post = Post(
-        title: title,
-        content: content,
-        authorId: authorId,
-        authorName: authorName,
-        createdAt: DateTime.now(),
-        likesCount: 0,
-        commentsCount: 0,
-        groupId: groupId,
-      );
+      _posts = await _databaseService.getUserPosts(userId);
+    } catch (e) {
+      _errorMessage = 'Failed to load user posts: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 
+  Future<void> createPost(PostModel post) async {
+    try {
       final postId = await _databaseService.insertPost(post);
-
-      // Add the new post to the local list with the generated ID
-      final newPost = Post(
-        id: postId,
-        title: title,
-        content: content,
-        authorId: authorId,
-        authorName: authorName,
-        createdAt: DateTime.now(),
-        likesCount: 0,
-        commentsCount: 0,
-        groupId: groupId,
-      );
-
+      final newPost = post.copyWith(id: postId);
       _posts.insert(0, newPost);
       notifyListeners();
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = 'Failed to create post: $e';
+      notifyListeners();
+    }
+  }
+
+  Future<void> updatePost(PostModel post) async {
+    try {
+      await _databaseService.updatePost(post);
+      final index = _posts.indexWhere((p) => p.id == post.id);
+      if (index != -1) {
+        _posts[index] = post;
+        notifyListeners();
+      }
+    } catch (e) {
+      _errorMessage = 'Failed to update post: $e';
+      notifyListeners();
+    }
+  }
+
+  Future<void> deletePost(int postId) async {
+    try {
+      await _databaseService.deletePost(postId);
+      _posts.removeWhere((p) => p.id == postId);
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = 'Failed to delete post: $e';
       notifyListeners();
     }
   }
@@ -82,32 +100,25 @@ class PostProvider extends ChangeNotifier {
       final isLiked = await _databaseService.isPostLiked(postId, userId);
       await _databaseService.toggleLike(postId, userId);
 
-      // Update the local post
-      final postIndex = _posts.indexWhere((post) => post.id == postId);
+      // Update the post in the local list
+      final postIndex = _posts.indexWhere((p) => p.id == postId);
       if (postIndex != -1) {
         final post = _posts[postIndex];
-        final updatedPost = Post(
-          id: post.id,
-          title: post.title,
-          content: post.content,
-          authorId: post.authorId,
-          authorName: post.authorName,
-          createdAt: post.createdAt,
-          likesCount: isLiked ? post.likesCount - 1 : post.likesCount + 1,
-          commentsCount: post.commentsCount,
-          groupId: post.groupId,
-        );
-        _posts[postIndex] = updatedPost;
+        final newLikesCount = isLiked ? post.likesCount - 1 : post.likesCount + 1;
+        _posts[postIndex] = post.copyWith(likesCount: newLikesCount);
         notifyListeners();
       }
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = 'Failed to toggle like: $e';
       notifyListeners();
     }
   }
 
-  void _setLoading(bool loading) {
-    _isLoading = loading;
-    notifyListeners();
+  Future<bool> isPostLiked(int postId, String userId) async {
+    try {
+      return await _databaseService.isPostLiked(postId, userId);
+    } catch (e) {
+      return false;
+    }
   }
 }
