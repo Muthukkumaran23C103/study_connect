@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/database_service.dart';
-import '../models/user_model.dart';
+import '../core/models/user_model.dart';
 import '../utils/validators.dart';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';

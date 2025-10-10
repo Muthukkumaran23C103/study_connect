@@ -1,173 +1,263 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/providers/auth_provider.dart';
 import '../../core/providers/study_group_provider.dart';
-import '../../core/models/study_group_model.dart';
+import '../../core/providers/auth_provider.dart';
 import '../../widgets/common/custom_text_field.dart';
+import '../../widgets/study_groups/group_card.dart';
+import '../../widgets/study_groups/create_group_dialog.dart';
 
 class StudyGroupsScreen extends StatefulWidget {
-  // Added const constructor to fix the const usage in HomeScreen
-  const StudyGroupsScreen({super.key});
+  const StudyGroupsScreen({Key? key}) : super(key: key);
 
   @override
   State<StudyGroupsScreen> createState() => _StudyGroupsScreenState();
 }
 
-class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
+class _StudyGroupsScreenState extends State<StudyGroupsScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
-    context.read<StudyGroupProvider>().loadGroups();
+    _tabController = TabController(length: 2, vsync: this);
+    _loadData();
   }
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
+  void _loadData() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final groupProvider = Provider.of<StudyGroupProvider>(context, listen: false);
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+
+      groupProvider.loadStudyGroups();
+      if (authProvider.currentUser != null) {
+        groupProvider.loadUserGroups(authProvider.currentUser!.id);
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
-        title: const Text('Study Groups'),
+        title: const Text(
+          'StudyConnect',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 24,
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () => _showCreateGroupDialog(context),
+            icon: const Icon(Icons.notifications_outlined),
+            onPressed: () {
+              // TODO: Implement notifications
+            },
           ),
         ],
-      ),
-      body: Consumer<StudyGroupProvider>(
-        builder: (context, groupProvider, child) {
-          if (groupProvider.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (groupProvider.errorMessage != null) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('Error: ${groupProvider.errorMessage}'),
-                  ElevatedButton(
-                    onPressed: () => groupProvider.loadGroups(),
-                    child: const Text('Retry'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(120),
+          child: Column(
+            children: [
+              // Search Bar (matches wireframe)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey,
+                    borderRadius: BorderRadius.circular(12),
                   ),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (value) {
+                      Provider.of<StudyGroupProvider>(context, listen: false)
+                          .searchGroups(value);
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Search',
+                      prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // Tab Bar
+              TabBar(
+                controller: _tabController,
+                indicatorColor: Theme.of(context).colorScheme.primary,
+                labelColor: Theme.of(context).colorScheme.primary,
+                unselectedLabelColor: Colors.grey,
+                tabs: const [
+                  Tab(text: 'Study Groups'),
+                  Tab(text: 'My Groups'),
                 ],
               ),
-            );
-          }
-
-          final groups = groupProvider.groups;
-          return Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: CustomTextField(
-                  controller: _searchController,
-                  label: 'Search Groups',
-                  onChanged: (value) {
-                    if (value.isNotEmpty) {
-                      groupProvider.searchGroups(value);
-                    } else {
-                      groupProvider.loadGroups();
-                    }
-                  },
-                ),
-              ),
-              Expanded(
-                child: RefreshIndicator(
-                  onRefresh: () => groupProvider.loadGroups(),
-                  child: groups.isEmpty
-                      ? const Center(child: Text('No groups found'))
-                      : ListView.builder(
-                    itemCount: groups.length,
-                    itemBuilder: (context, index) {
-                      final group = groups[index];
-                      return _buildGroupCard(context, group);
-                    },
-                  ),
-                ),
-              ),
             ],
-          );
+          ),
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildAllGroupsTab(),
+          _buildMyGroupsTab(),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          _showCreateGroupDialog();
         },
+        icon: const Icon(Icons.add),
+        label: const Text('Create Group'),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Colors.white,
       ),
     );
   }
 
-  Widget _buildGroupCard(BuildContext context, StudyGroup group) {
-    final authProvider = context.read<AuthProvider>();
-    final groupProvider = context.read<StudyGroupProvider>();
-    final currentUser = authProvider.currentUser;
-    final isMember = groupProvider.isUserInGroup(
-        group.id!, currentUser?.id.toString() ?? '');
+  Widget _buildAllGroupsTab() {
+    return Consumer<StudyGroupProvider>(
+      builder: (context, groupProvider, child) {
+        if (groupProvider.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+        if (groupProvider.studyGroups.isEmpty) {
+          return _buildEmptyState('No study groups found', Icons.groups_outlined);
+        }
+
+        return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  backgroundColor: _getCategoryColor(group.category),
-                  child: Icon(_getCategoryIcon(group.category)),
+            // Recommended Section (matches wireframe)
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text(
+                'Recommended',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        group.name,
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      Text(
-                        '${group.memberCount} members',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
+              ),
+            ),
+            // Group Cards in Grid (3 per row as in wireframe)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: GridView.builder(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 0.8,
                   ),
+                  itemCount: groupProvider.studyGroups.length,
+                  itemBuilder: (context, index) {
+                    final group = groupProvider.studyGroups[index];
+                    return _buildGroupCard(group);
+                  },
                 ),
-                Chip(
-                  label: Text(group.category),
-                  backgroundColor: _getCategoryColor(group.category),
-                ),
-              ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildMyGroupsTab() {
+    return Consumer<StudyGroupProvider>(
+      builder: (context, groupProvider, child) {
+        if (groupProvider.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (groupProvider.userGroups.isEmpty) {
+          return _buildEmptyState('You haven\'t joined any groups yet', Icons.group_add);
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: groupProvider.userGroups.length,
+          itemBuilder: (context, index) {
+            final group = groupProvider.userGroups[index];
+            return _buildMyGroupCard(group);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildGroupCard(dynamic group) {
+    // Match the wireframe design with colored cards
+    final colors = [
+      Colors.blue!,
+      Colors.green!,
+      Colors.orange!,
+      Colors.purple!,
+    ];
+    final color = colors[group.hashCode % colors.length];
+
+    return GestureDetector(
+      onTap: () {
+        _navigateToGroupDetail(group);
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Group Icon (as in wireframe)
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                _getGroupIcon(group.name),
+                color: Theme.of(context).colorScheme.primary,
+                size: 24,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
-              group.description,
-              style: Theme.of(context).textTheme.bodyMedium,
+              group.name,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                if (isMember)
-                  ElevatedButton.icon(
-                    onPressed: () => Navigator.pushNamed(
-                      context,
-                      '/chat',
-                      arguments: {'group': group},
-                    ),
-                    icon: const Icon(Icons.chat),
-                    label: const Text('Chat'),
-                  )
-                else
-                  ElevatedButton(
-                    onPressed: () => _joinGroup(context, group),
-                    child: const Text('Join'),
-                  ),
-                const SizedBox(width: 8),
-                Text('${group.memberCount} members'),
-              ],
+            const SizedBox(height: 4),
+            Text(
+              '${group.memberCount} members',
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.grey,
+              ),
             ),
           ],
         ),
@@ -175,129 +265,256 @@ class _StudyGroupsScreenState extends State<StudyGroupsScreen> {
     );
   }
 
-  IconData _getCategoryIcon(String category) {
-    switch (category.toLowerCase()) {
-      case 'ai':
-        return Icons.psychology;
-      case 'dev':
-      case 'mobile development':
-        return Icons.phone_android;
-      case 'os':
-      case 'operating systems':
-        return Icons.computer;
-      default:
-        return Icons.group;
-    }
+  Widget _buildMyGroupCard(dynamic group) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(16),
+        leading: CircleAvatar(
+          backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+          child: Icon(
+            _getGroupIcon(group.name),
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+        title: Text(
+          group.name,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Text(
+              group.description,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${group.memberCount} members',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+              ),
+            ),
+          ],
+        ),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        onTap: () => _navigateToGroupDetail(group),
+      ),
+    );
   }
 
-  Color _getCategoryColor(String category) {
-    switch (category.toLowerCase()) {
-      case 'ai':
-        return Colors.purple.shade100;
-      case 'dev':
-      case 'mobile development':
-        return Colors.blue.shade100;
-      case 'os':
-      case 'operating systems':
-        return Colors.green.shade100;
-      default:
-        return Colors.grey.shade100;
-    }
+  Widget _buildEmptyState(String message, IconData icon) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            size: 64,
+            color: Colors.grey,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            message,
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
   }
 
-  Future<void> _joinGroup(BuildContext context, StudyGroup group) async {
-    final authProvider = context.read<AuthProvider>();
-    final groupProvider = context.read<StudyGroupProvider>();
-    final currentUser = authProvider.currentUser;
-    final currentUserId = currentUser!.id.toString();
-
-    await groupProvider.joinGroup(group.id!, currentUserId);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Joined ${group.name}!')),
-      );
-    }
+  IconData _getGroupIcon(String groupName) {
+    final name = groupName.toLowerCase();
+    if (name.contains('ai') || name.contains('ml')) return Icons.psychology;
+    if (name.contains('mobile') || name.contains('app')) return Icons.phone_android;
+    if (name.contains('os') || name.contains('system')) return Icons.computer;
+    if (name.contains('web')) return Icons.web;
+    if (name.contains('data')) return Icons.storage;
+    if (name.contains('java')) return Icons.code;
+    if (name.contains('placement')) return Icons.work;
+    return Icons.school;
   }
 
-  void _showCreateGroupDialog(BuildContext context) {
-    final TextEditingController nameController = TextEditingController();
-    final TextEditingController descriptionController = TextEditingController();
-    String selectedCategory = 'General';
-    final categories = ['AI', 'DEV', 'OS', 'General'];
+  void _navigateToGroupDetail(dynamic group) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => GroupDetailScreen(group: group),
+      ),
+    );
+  }
 
+  void _showCreateGroupDialog() {
     showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('Create Study Group'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CustomTextField(
-                      controller: nameController,
-                      label: 'Group Name',
-                    ),
-                    const SizedBox(height: 16),
-                    CustomTextField(
-                      controller: descriptionController,
-                      label: 'Description',
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      value: selectedCategory,
-                      decoration: const InputDecoration(
-                        labelText: 'Category',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: categories.map((String category) {
-                        return DropdownMenuItem<String>(
-                          value: category,
-                          child: Text(category),
-                        );
-                      }).toList(),
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          selectedCategory = newValue!;
-                        });
-                      },
-                    ),
-                  ],
+      builder: (context) => const CreateGroupDialog(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _tabController.dispose();
+    super.dispose();
+  }
+}
+
+// Group Detail Screen (matches wireframe with tabs)
+class GroupDetailScreen extends StatefulWidget {
+  final dynamic group;
+
+  const GroupDetailScreen({Key? key, required this.group}) : super(key: key);
+
+  @override
+  State<GroupDetailScreen> createState() => _GroupDetailScreenState();
+}
+
+class _GroupDetailScreenState extends State<GroupDetailScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.group.name),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.more_vert),
+            onPressed: () {
+              // Show group options
+            },
+          ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: Theme.of(context).colorScheme.primary,
+          labelColor: Theme.of(context).colorScheme.primary,
+          unselectedLabelColor: Colors.grey,
+          tabs: const [
+            Tab(text: 'General Chat'),
+            Tab(text: 'Notes'),
+            Tab(text: 'Quizzes'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildGeneralChatTab(),
+          _buildNotesTab(),
+          _buildQuizzesTab(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGeneralChatTab() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: const Center(
+        child: Text('General Chat - Coming soon!'),
+      ),
+    );
+  }
+
+  Widget _buildNotesTab() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          // Notes categories (as in wireframe)
+          GridView.count(
+            shrinkWrap: true,
+            crossAxisCount: 2,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 2,
+            children: [
+              _buildNoteCategory('All Notes', Icons.note_outlined),
+              _buildNoteCategory('Curated', Icons.star_outline),
+              _buildNoteCategory('Books', Icons.book_outlined),
+              _buildNoteCategory('Playlists', Icons.playlist_play),
+              _buildNoteCategory('PYQ', Icons.quiz_outlined),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuizzesTab() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: const Center(
+        child: Text('Quizzes - Coming soon!'),
+      ),
+    );
+  }
+
+  Widget _buildNoteCategory(String title, IconData icon) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        onTap: () {
+          // Navigate to notes of this category
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(icon, color: Theme.of(context).colorScheme.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
+              const Text(
+                'Post',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
                 ),
-                ElevatedButton(
-                  onPressed: () async {
-                    if (nameController.text.isNotEmpty &&
-                        descriptionController.text.isNotEmpty) {
-                      final groupProvider = context.read<StudyGroupProvider>();
-                      await groupProvider.createGroup(
-                        nameController.text,
-                        descriptionController.text,
-                        selectedCategory,
-                      );
-                      if (mounted) {
-                        Navigator.of(context).pop();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Group created successfully!')),
-                        );
-                      }
-                    }
-                  },
-                  child: const Text('Create'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+              ),
+            ],
+          ),
+        ),
+      ),
     );
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 }

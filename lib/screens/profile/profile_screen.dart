@@ -1,226 +1,214 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/auth_provider.dart';
-import '../../widgets/common/custom_text_field.dart';
-import '../../widgets/common/custom_button.dart';
-import '../../core/models/user_model.dart';
+import '../../core/providers/study_group_provider.dart';
 
-class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
-
-  @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
-}
-
-class _ProfileScreenState extends State<ProfileScreen> {
-  late TextEditingController _nameController;
-  late TextEditingController _emailController;
-  late TextEditingController _collegeController;
-  late TextEditingController _yearController;
-  late TextEditingController _branchController;
-
-  @override
-  void initState() {
-    super.initState();
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final user = authProvider.currentUser;
-
-    _nameController = TextEditingController(text: user?.displayName ?? '');
-    _emailController = TextEditingController(text: user?.email ?? '');
-    _collegeController = TextEditingController(text: user?.college ?? '');
-    _yearController = TextEditingController(text: user?.year ?? '');
-    _branchController = TextEditingController(text: user?.branch ?? '');
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
-    _collegeController.dispose();
-    _yearController.dispose();
-    _branchController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _saveProfile() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final currentUser = authProvider.currentUser!;
-
-    try {
-      await authProvider.updateProfile(
-        displayName: _nameController.text,
-        college: _collegeController.text,
-        year: _yearController.text,
-        branch: _branchController.text,
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile updated successfully!')),
-        );
-      }
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${error.toString()}')),
-        );
-      }
-    }
-  }
-
-  Future<void> _logout() async {
-    try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      await authProvider.logout();
-      if (mounted) {
-        Navigator.of(context).pushReplacementNamed('/login');
-      }
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error logging out: ${error.toString()}')),
-        );
-      }
-    }
-  }
+class ProfileScreen extends StatelessWidget {
+  const ProfileScreen({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Profile'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              // TODO: Navigate to settings
+            },
+          ),
+        ],
       ),
       body: Consumer<AuthProvider>(
         builder: (context, authProvider, child) {
           final user = authProvider.currentUser;
 
           if (user == null) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(
+              child: Text('Please login to view profile'),
+            );
           }
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Profile Avatar
-                Center(
-                  child: Stack(
-                    children: [
-                      CircleAvatar(
-                        radius: 50,
-                        backgroundImage: user.avatarPath != null
-                            ? NetworkImage(user.avatarPath!)
-                            : null,
-                        child: user.avatarPath == null
-                            ? const Icon(Icons.person, size: 50)
-                            : null,
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primary,
-                            shape: BoxShape.circle,
-                          ),
-                          child: IconButton(
-                            icon: const Icon(Icons.camera_alt, color: Colors.white),
-                            onPressed: () {
-                              // TODO: Implement image picker
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Image picker coming soon!')),
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                    ],
+                // User Avatar and Info
+                CircleAvatar(
+                  radius: 60,
+                  backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                  child: user.avatarUrl != null && user.avatarUrl!.isNotEmpty
+                      ? ClipOval(
+                    child: Image.network(
+                      user.avatarUrl!,
+                      width: 120,
+                      height: 120,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(
+                          Icons.person,
+                          size: 60,
+                          color: Theme.of(context).colorScheme.primary,
+                        );
+                      },
+                    ),
+                  )
+                      : Icon(
+                    Icons.person,
+                    size: 60,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
+                const SizedBox(height: 16),
+                Text(
+                  user.displayName,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  user.email,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (user.college?.isNotEmpty ?? false)
+                  Chip(
+                    label: Text(user.college!),
+                    backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                  ),
                 const SizedBox(height: 32),
 
-                // Form Fields
-                CustomTextField(
-                  label: 'Full Name',
-                  hintText: 'Enter your full name',  // ✅ FIXED: hintText
-                  controller: _nameController,
-                  prefixIcon: const Icon(Icons.person_outline),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your name';
+                // Study Groups Section
+                _buildSectionHeader('Study Groups', context),
+                const SizedBox(height: 16),
+                Consumer<StudyGroupProvider>(
+                  builder: (context, groupProvider, child) {
+                    if (groupProvider.userGroups.isEmpty) {
+                      return const Text('No groups joined yet');
                     }
-                    return null;
+
+                    return ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: groupProvider.userGroups.length,
+                      itemBuilder: (context, index) {
+                        final group = groupProvider.userGroups[index];
+                        return _buildGroupItem(group, context);
+                      },
+                    );
                   },
                 ),
-                const SizedBox(height: 16),
 
-                CustomTextField(
-                  label: 'Email Address',
-                  hintText: 'Enter your email address',  // ✅ FIXED: hintText
-                  controller: _emailController,
-                  enabled: false,  // Email shouldn't be editable
-                  prefixIcon: const Icon(Icons.email_outlined),
-                ),
-                const SizedBox(height: 16),
-
-                CustomTextField(
-                  label: 'College/University',
-                  hintText: 'Enter your college or university',  // ✅ FIXED: hintText
-                  controller: _collegeController,
-                  prefixIcon: const Icon(Icons.school_outlined),
-                ),
-                const SizedBox(height: 16),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: CustomTextField(
-                        label: 'Year',
-                        hintText: 'e.g., 2nd Year',  // ✅ FIXED: hintText
-                        controller: _yearController,
-                        prefixIcon: const Icon(Icons.calendar_today_outlined),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: CustomTextField(
-                        label: 'Branch',
-                        hintText: 'e.g., Computer Science',  // ✅ FIXED: hintText
-                        controller: _branchController,
-                        prefixIcon: const Icon(Icons.category_outlined),
-                      ),
-                    ),
-                  ],
-                ),
                 const SizedBox(height: 32),
 
-                // Action Buttons
-                Column(
-                  children: [
-                    CustomButton(
-                      text: 'Save Changes',  // ✅ FIXED: text parameter
-                      onPressed: _saveProfile,
-                      type: ButtonType.primary,  // ✅ FIXED: type parameter
-                      icon: Icons.save,
+                // Logout Button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _showLogoutDialog(context),
+                    icon: const Icon(Icons.logout),
+                    label: const Text('Logout'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
-                    const SizedBox(height: 16),
-                    CustomButton(
-                      text: 'Logout',  // ✅ FIXED: text parameter
-                      onPressed: _logout,
-                      type: ButtonType.secondary,  // ✅ FIXED: type parameter
-                      icon: Icons.logout,
-                    ),
-                  ],
+                  ),
                 ),
               ],
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const Spacer(),
+        TextButton(
+          onPressed: () {
+            // Navigate to all groups
+          },
+          child: const Text('View All'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGroupItem(dynamic group, BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ListTile(
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Icon(Icons.group),
+        ),
+        title: Text(
+          group.name,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        subtitle: Text('${group.memberCount} members'),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        onTap: () {
+          // Navigate to group detail
+        },
+      ),
+    );
+  }
+
+  void _showLogoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Provider.of<AuthProvider>(context, listen: false).logout();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Logout'),
+          ),
+        ],
       ),
     );
   }

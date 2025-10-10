@@ -1,83 +1,89 @@
 class UserModel {
-  final int? id;
+  final String id;
   final String email;
-  final String password;
   final String displayName;
+  final String? avatarUrl;
   final String? college;
   final String? year;
   final String? branch;
-  final String? avatarPath;
+  final List<String> joinedGroups;
   final DateTime createdAt;
-  final DateTime? lastActive;
+  final DateTime? updatedAt;
+  final bool isVerified;
 
   UserModel({
-    this.id,
+    required this.id,
     required this.email,
-    required this.password,
     required this.displayName,
+    this.avatarUrl,
     this.college,
     this.year,
     this.branch,
-    this.avatarPath,
+    this.joinedGroups = const [],
     required this.createdAt,
-    this.lastActive,
+    this.updatedAt,
+    this.isVerified = false,
   });
 
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'email': email,
-      'password': password,
-      'displayName': displayName,
+      'display_name': displayName,
+      'avatar_url': avatarUrl,
       'college': college,
       'year': year,
       'branch': branch,
-      'avatarPath': avatarPath,
-      'createdAt': createdAt.toIso8601String(),
-      'lastActive': lastActive?.toIso8601String(),
+      'joined_groups': joinedGroups.join(','),
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt?.toIso8601String(),
+      'is_verified': isVerified ? 1 : 0,
     };
   }
 
-  factory UserModel.fromMap(Map<String, dynamic> map) {
+  static UserModel fromMap(Map<String, dynamic> map) {
     return UserModel(
-      id: map['id']?.toInt(),
-      email: map['email'] ?? '',
-      password: map['password'] ?? '',
-      displayName: map['displayName'] ?? '',
-      college: map['college'],
-      year: map['year'],
-      branch: map['branch'],
-      avatarPath: map['avatarPath'],
-      createdAt: DateTime.parse(map['createdAt']),
-      lastActive: map['lastActive'] != null
-          ? DateTime.parse(map['lastActive'])
-          : null,
+      id: map['id'] as String,
+      email: map['email'] as String,
+      displayName: map['display_name'] as String,
+      avatarUrl: map['avatar_url'] as String?,
+      college: map['college'] as String?,
+      year: map['year'] as String?,
+      branch: map['branch'] as String?,
+      joinedGroups: map['joined_groups'] != null
+          ? (map['joined_groups'] as String).split(',').where((s) => s.isNotEmpty).toList()
+          : [],
+      createdAt: DateTime.parse(map['created_at'] as String),
+      updatedAt: map['updated_at'] != null ? DateTime.parse(map['updated_at'] as String) : null,
+      isVerified: (map['is_verified'] as int?) == 1,
     );
   }
 
   UserModel copyWith({
-    int? id,
+    String? id,
     String? email,
-    String? password,
     String? displayName,
+    String? avatarUrl,
     String? college,
     String? year,
     String? branch,
-    String? avatarPath,
+    List<String>? joinedGroups,
     DateTime? createdAt,
-    DateTime? lastActive,
+    DateTime? updatedAt,
+    bool? isVerified,
   }) {
     return UserModel(
       id: id ?? this.id,
       email: email ?? this.email,
-      password: password ?? this.password,
       displayName: displayName ?? this.displayName,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
       college: college ?? this.college,
       year: year ?? this.year,
       branch: branch ?? this.branch,
-      avatarPath: avatarPath ?? this.avatarPath,
+      joinedGroups: joinedGroups ?? this.joinedGroups,
       createdAt: createdAt ?? this.createdAt,
-      lastActive: lastActive ?? this.lastActive,
+      updatedAt: updatedAt ?? this.updatedAt,
+      isVerified: isVerified ?? this.isVerified,
     );
   }
 }
